@@ -3,23 +3,36 @@
 #include <stdio.h>
 #include <stdint.h>
 
+
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
+
 #ifndef __SHARED_MEMORY_H__
 #define __SHARED_MEMORY_H__
 
 
+//For debugging purposes
+#define DISABLE_DUMPING_AND_RECYCLING 	(0)
+#define DISABLE_MEMORY_EXPANSION 		(0)
+//Instead of disabling DISABLE_MEMORY_EXPANSION, a better idea is to
+//take INITIAL_FILE_SIZE big enough such that expansion isn't needed
 
-#define	DEBUGGING_ALLOWED	1
 
+//If printing location is stderr, it can cause conflicts with build.
+#define	DEBUG_MESSAGES_ALLOWED 	(1)
 
 
 //To debug any of them , just make them 1
-//If DEBUGGING_ALLOWED is not 1, none of these flags get debugged even if they are 1.
-#define	DEBUG_PRINT_MESSAGES		1
-#define	DEBUG_FAIL_MESSAGES			1
+//If DEBUG_MESSAGES_ALLOWED is not 1, none of these flags get debugged even if they are 1.
+#define	DEBUG_PRINT_MESSAGES 	(1)
+#define	DEBUG_FAIL_MESSAGES		(1)
+
 
 
 //{{{{{{{{{{{{{{{{{{{{{{{{{{
-#if (DEBUGGING_ALLOWED && 1) && (DEBUG_PRINT_MESSAGES && 1)
+#if (DEBUG_MESSAGES_ALLOWED && 1) && (DEBUG_PRINT_MESSAGES && 1)
 		#define print_error(errorDescription) fprintf(stderr, "\n%s : func(%s) : %s : %s\n\n", __FILE__, __func__, errorDescription, strerror(errno));
 #else
 		#define print_error(errorDescription)
@@ -29,7 +42,7 @@
 
 
 //{{{{{{{{{{{{{{{{{{{{{{{{{{
-#if (DEBUGGING_ALLOWED && 1) && (DEBUG_FAIL_MESSAGES && 1)
+#if (DEBUG_MESSAGES_ALLOWED && 1) && (DEBUG_FAIL_MESSAGES && 1)
 
 	#define FAIL_IF(condition, message, returnVal) \
 	if((condition)){\
@@ -53,7 +66,7 @@
  *
  *	If need more than 4 GB, set this as 1.
  *
- *	By setting this 1, memory usage doubles.
+ *	By setting this 1, memory usage doubles as well.
  *
  *	This macro simply makes program to switch to use `uint32_t` instead of `size_t`
  *	in struct CNode "only".
@@ -61,12 +74,7 @@
  *	By doing that, array of `possibilities`, which generally would use (64bits)*array size
  *	because of size_t(unless a 32 bit machine) drops usage to half.
  **/
-#define LARGE_MEMORY_NEEDED 1
-
-
-
-
-#define ENABLE_DUMPING_AND_RECYCLING 1
+#define LARGE_MEMORY_NEEDED (1)
 
 
 
@@ -84,14 +92,10 @@
 
 
 
-#define KB * 1000
-#define MB * 1000000
-#define GB * (size_t)1000000000
+#define KB(x) (x * 1024)
+#define MB(x) (x * 1024 * 1024)
+#define GB(x) (x * 1024 * 1024 * 1024)
 
-
-
-
-#define INITIAL_FILE_SIZE ( 10 MB )
 
 
 /*
@@ -102,15 +106,9 @@
  *	to function correctly. 
  *
  */
-#define EXPANDING_SIZE ( 20 MB )
+#define INITIAL_FILE_SIZE 	MB(10) //Keep it greater than sizeof(CNode)+sizeof(INode)
 
-
-
-/*
- *	This is the minimum size of the shared memory file which is for sure required by
- *	it to function correctly
- */
-#define ROOT_SIZE (sizeof(INode) + sizeof(CNode))
+#define EXPANDING_SIZE 		MB(20)
 
 
 
@@ -225,10 +223,10 @@ struct SharedMemoryManager{
  *	"6MB" when using dumping and recycling.
  *
  **/
-#define DUMP_YARD_SIZE 128
+#define DUMP_YARD_SIZE 64
 
 #define DUMP_YARD_BITMAP_ARRAY_SIZE \
-	((DUMP_YARD_SIZE % NO_OF_BITS == 0) ? DUMP_YARD_SIZE/NO_OF_BITS : ((DUMP_YARD_SIZE/NO_OF_BITS) + 1))
+((DUMP_YARD_SIZE % NO_OF_BITS == 0) ? DUMP_YARD_SIZE/NO_OF_BITS : ((DUMP_YARD_SIZE/NO_OF_BITS) + 1))
 
 struct SharedMemoryStatus
 {
@@ -239,7 +237,7 @@ struct SharedMemoryStatus
 	_Atomic(size_t) writeFromOffset;
 	_Atomic(size_t) sharedMemoryFileSize;
 	
-#if (ENABLE_DUMPING_AND_RECYCLING && 1)
+#if !(DISABLE_DUMPING_AND_RECYCLING)
 	_Atomic(size_t) wastedMemoryDumpYard [DUMP_YARD_SIZE];
 	_Atomic(size_t)	parentINodesOfDumper [DUMP_YARD_SIZE];
 	_Atomic(size_t) bitmapForDumping	 [DUMP_YARD_BITMAP_ARRAY_SIZE];
@@ -249,12 +247,11 @@ struct SharedMemoryStatus
 	
 	
 #else
-//use libkern/OSAtomic.h instead
 	
 	size_t 			writeFromOffset;
 	size_t 			sharedMemoryFileSize;
 	
-#if (ENABLE_DUMPING_AND_RECYCLING && 1)
+#if !(DISABLE_DUMPING_AND_RECYCLING)
 	size_t 			wastedMemoryDumpYard [DUMP_YARD_SIZE];
 	size_t			parentINodesOfDumper [DUMP_YARD_SIZE];
 	size_t 			bitmapForDumping	 [DUMP_YARD_BITMAP_ARRAY_SIZE];
@@ -284,7 +281,7 @@ struct SharedMemoryStatus
  *		Name of the shared memory file
  *
  **/
-bool appointSharedMemoryManager(const char *status_file_name, const char *shared_memory_file_name);
+bool __dtsharedmemory_set_manager(const char *status_file_name, const char *shared_memory_file_name);
 
 
 
@@ -325,13 +322,16 @@ typedef struct INode{
  *	for rare cases. Bigger size of CNode means more time taken for insertion and also
  *	shared memory expands really fast.
  */
-#define LOWER_LIMIT 32
-#define UPPER_LIMIT 127
-#define POSSIBLE_CHARACTERS ((UPPER_LIMIT+1) - LOWER_LIMIT)
-
+#define LOWER_LIMIT 0
+#define UPPER_LIMIT 128
+#define POSSIBLE_CHARACTERS (UPPER_LIMIT - LOWER_LIMIT) //The array size
 //In a path, most frequently occuring characters are from 0 - 128,
 //considering other ascii chars just consumes more space and time while insert and search.
 
+#if UPPER_LIMIT <= LOWER_LIMIT
+#	error 	Invalid range of possible characters.\
+	Reset UPPER_LIMIT and LOWER_LIMIT values.
+#endif
 
 
 /*
@@ -384,7 +384,11 @@ typedef struct CNode{
 
 
 
-
+/*
+ *	This is the minimum size of the shared memory file which is for sure required by
+ *	it to function correctly
+ */
+#define ROOT_SIZE (sizeof(INode) + sizeof(CNode))
 
 
 
@@ -405,7 +409,7 @@ typedef struct CNode{
  *		false implies path should be denied
  *
  **/
-bool __dtsharedmemory_insert(const unsigned char *path, bool pathPermission);
+bool __dtsharedmemory_insert(const char *path, bool pathPermission);
 
 
 
@@ -429,7 +433,7 @@ bool __dtsharedmemory_insert(const unsigned char *path, bool pathPermission);
  *		false implies path should be denied
  *
  **/
-bool __dtsharedmemory_search(const unsigned char *path, bool *pathPermission);
+bool __dtsharedmemory_search(const char *path, bool *pathPermission);
 
 
 
@@ -444,8 +448,30 @@ bool __dtsharedmemory_search(const unsigned char *path, bool *pathPermission);
  *	let it take our old fd.
  *
  **/
-bool __sharedmemory_reset_fd();
+bool __dtsharedmemory_reset_fd();
 
-struct SharedMemoryManager getAppointedManager();
+
+
+/**
+ *
+ *	__dtsharedmemory_getStatusFileFd() returns status file fd and __dtsharedmemory_getSharedMemoryFileFd()
+ *	returns shared memory file fd, if manager is not NULL.
+ *	This provides a more faster way to check if dup2(2) or close(2)
+ *	are trying to close this fd and if they are the call __dtsharedmemory_reset_fd().
+ *
+ **/
+int __dtsharedmemory_getStatusFileFd();
+int __dtsharedmemory_getSharedMemoryFileFd();
+
+
+
+/**
+ *
+ *	Returns the offset from which a new node would be written,
+ *	while simply is the real file size used.
+ *
+ **/
+size_t __dtsharedmemory_getUsedSharedMemorySize();
+
 
 #endif
