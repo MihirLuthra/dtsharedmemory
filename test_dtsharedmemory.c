@@ -13,7 +13,7 @@
 
 #define NUMBER_OF_PROCESSES 8
 
-#define NUMBER_OF_THREADS_PER_PROCESS 3 //excluding main
+#define NUMBER_OF_THREADS_PER_PROCESS 2 //excluding main
 #define NUMBER_OF_STRINGS_TO_BE_INSERTED_BY_EACH_THREAD 1000
 
 #define MAX_STRING_SIZE 25
@@ -28,11 +28,9 @@
 #include <fcntl.h>
 #include <string.h>
 #include <time.h>
+#include <sys/param.h>
 
 #include "dtsharedmemory.h"
-
-#define SHARED_MEMORY_STATUS_FILE_NAME 	".shared_Memory_Status"
-#define SHARED_MEMORY_FILE_NAME 		".shared_Memory"
 
 
 //Store any errors that occured during the test in this file
@@ -47,7 +45,7 @@ bool flag = false;
 struct PathData
 {
 	int number_of_strings;	//To be inserted by that particular thread
-	unsigned char **path;	//Array of those strings
+	char **path;			//Array of those strings
 	bool *pathPersmission;	//Array of permissions associated with those strings
 };
 
@@ -55,35 +53,37 @@ struct PathData
 void* pathInserter(void* arg);
 void* pathSearcher(void* arg);
 
-unsigned char *get_random_string(int minLength, int maxLength);
+char *get_random_string(int minLength, int maxLength);
 void prepareThreadArguments(struct PathData *argsToThreads, int number_of_strings);
 
 
 int main()
 {
+//________________________________________________________________________________
+//SETUP ERROR LOGGING
+//SETUP FILE NAME FOR SHARED FILE AND ITS STATUS FILE
+//________________________________________________________________________________
 	
-	//Create status and shared memory file and set to initial size
-	if(access(SHARED_MEMORY_STATUS_FILE_NAME, F_OK) == -1 || access(SHARED_MEMORY_FILE_NAME, F_OK) == -1)
-	{
-		int fd;
-		
-		fd = creat(SHARED_MEMORY_STATUS_FILE_NAME, 0600);
-		ftruncate(fd, sizeof(struct SharedMemoryStatus));
-		
-		fd = creat(SHARED_MEMORY_FILE_NAME, 0600);
-		ftruncate(fd, INITIAL_FILE_SIZE);
-	}
 	//Open file for logging errors if any
 	errors_log = fopen("errors.log", "w");
+	char mktemp_dtsm_template[MAXPATHLEN] 			= "macports-dtsm-XXXXXX";
+	char mktemp_dtsm_status_template[MAXPATHLEN] 	= "macports-dtsm-status-XXXXXX";
+	
+	char *dtsm_status_file 	= mktemp(mktemp_dtsm_status_template);
+	char *dtsm_file			= mktemp(mktemp_dtsm_template);
 	
 	
+//________________________________________________________________________________
+	
+	
+//________________________________________________________________________________
+//(1) 	SETUP TO ALLOW ONLY PARENT PROCESS TO FORK
+//(2) 	SPLIT NUMBER_OF_PROCESSES EQUALLY 3 PHASES, SO THEY CAN GET FORKED AT
+//		START OF PROGRAM, BEFORE INSERT & AFTER INSERT(BEFORE SEARCH)
+//________________________________________________________________________________
 	int i;
 	int isParentProcess = 1;//only allow parent process to fork
 	
-	//There are 3 phases for forking
-	//1.Starting of program
-	//2.Before insert
-	//3.After insert & before search
 	int number_of_fork_phases = 3;
 	int *processCountPerPhase = (int *)malloc(sizeof(int) * number_of_fork_phases);
 	
@@ -96,17 +96,21 @@ int main()
 	}
 	
 	int insertion_count_per_process = NUMBER_OF_STRINGS_TO_BE_INSERTED_BY_EACH_THREAD * NUMBER_OF_THREADS_PER_PROCESS;
-	
-	//subtracting num of processes forked in last phase because they don't insert
-	printf("\nStrings to be inserted = %d\n\n", (insertion_count_per_process * (NUMBER_OF_PROCESSES - processCountPerPhase[number_of_fork_phases - 1])));
-	
+
 	
 	pid_t childProcesses[NUMBER_OF_PROCESSES];//To wait for all processes
 	int processCountInThisPhase;
 	int processno = 0;
 	int atPhase = 0;
 	
-	//Fork Phase 1
+//________________________________________________________________________________
+
+	//subtracting num of processes forked in last phase because they don't do insert
+	printf("\nStrings to be inserted = %d\n\n", (insertion_count_per_process * (NUMBER_OF_PROCESSES - processCountPerPhase[number_of_fork_phases - 1])));
+	
+//________________________________________________________________________________
+//FORK PHASE 1
+//________________________________________________________________________________
 	processCountInThisPhase = processCountPerPhase[atPhase++];
 	
 	for(i = 0 ; i < processCountInThisPhase ; ++i)
@@ -116,16 +120,20 @@ int main()
 			childProcesses[processno++] = isParentProcess = fork();
 		}
 	}
-
+//________________________________________________________________________________
 	
-	clock_t t;
-	double time_taken;
-	struct PathData argsToThreads[NUMBER_OF_THREADS_PER_PROCESS];
 	
+	
+//________________________________________________________________________________
+//PREPARE ARGUMENTS TO BE SENT TO THREADS.
+//JUST GENERATE `NUMBER_OF_STRINGS_TO_BE_INSERTED_BY_EACH_THREAD` RANDOM STRINGS
+//AND SEND THEM TO EACH THREAD
+//________________________________________________________________________________
 	
 	srand(time(0));
 	
-	// Feed random data to be sent to threads
+	struct PathData argsToThreads[NUMBER_OF_THREADS_PER_PROCESS];
+	
 	for(i = 0 ; i < NUMBER_OF_THREADS_PER_PROCESS ; ++i)
 	{
 		
@@ -135,28 +143,56 @@ int main()
 							   );
 		
 	}
+//________________________________________________________________________________
 
 
-	bool didAppointManager;
+//________________________________________________________________________________
+//SET SHARED MEMORY MANAGER
+//________________________________________________________________________________
+	clock_t t;
+	long double time_taken;
 	
-	//Monitor time taken to appointSharedMemoryManager()
+	bool didSetManager;
+	
+	//Monitor time taken to __dtsharedmemory_set_manager()
 	t = clock();
 	
-	didAppointManager = appointSharedMemoryManager(SHARED_MEMORY_STATUS_FILE_NAME, SHARED_MEMORY_FILE_NAME);
+	didSetManager = __dtsharedmemory_set_manager(dtsm_status_file, dtsm_file);
 	
-	if(!didAppointManager)
+	if(!didSetManager)
 	{
-		fprintf(errors_log, "\nappointSharedMemoryManager() failed. Test failed\n\n");
+		fprintf(errors_log, "\n__dtsharedmemory_set_manager() failed. Test failed\n\n");
 		flag = true;
 	}
 	
 	t = clock() - t;
 	time_taken = ((double)t)/CLOCKS_PER_SEC;
 	
-	printf("\nTime taken by appointSharedMemoryManager() = %f\n", time_taken);
+	printf("\nTime taken by __dtsharedmemory_set_manager() = %Lf\n", time_taken);
 	
 	
-	//Fork Phase 2
+	//Monitor time taken to __dtsharedmemory_set_manager() one second call
+	//This should be way less because Global(manager) is already set
+	t = clock();
+	
+	didSetManager = __dtsharedmemory_set_manager(dtsm_status_file, dtsm_file);
+	
+	if(!didSetManager)
+	{
+		fprintf(errors_log, "\n__dtsharedmemory_set_manager() failed when called 2nd time. Test failed\n\n");
+		flag = true;
+	}
+	
+	t = clock() - t;
+	time_taken = ((double)t)/CLOCKS_PER_SEC;
+	
+	printf("\nTime taken by second call to __dtsharedmemory_set_manager() = %Lf\n", time_taken);
+//________________________________________________________________________________
+
+	
+//________________________________________________________________________________
+//FORK PHASE 2
+//________________________________________________________________________________
 	processCountInThisPhase = processCountPerPhase[atPhase++];
 	
 	for(i = 0 ; i < processCountInThisPhase ; ++i)
@@ -166,11 +202,14 @@ int main()
 			childProcesses[processno++] = isParentProcess = fork();
 		}
 	}
-
+//________________________________________________________________________________
 	
 	
 	pthread_t tids[NUMBER_OF_THREADS_PER_PROCESS];
 
+//________________________________________________________________________________
+//INSERTION
+//________________________________________________________________________________
 	
 	t = clock();
 	
@@ -192,10 +231,13 @@ int main()
 	t = clock() - t;
 	time_taken = ((double)t)/CLOCKS_PER_SEC;
 	
-	printf("\nIn process %d Time taken to insert %d strings by %d threads = %f\n", getpid(), insertion_count_per_process, NUMBER_OF_THREADS_PER_PROCESS, time_taken);
+	printf("\nIn process %d Time taken to insert %d strings by %d threads = %Lf\n", getpid(), insertion_count_per_process, NUMBER_OF_THREADS_PER_PROCESS, time_taken);
+//________________________________________________________________________________
+
 	
-	
-	//Fork Phase 3
+//________________________________________________________________________________
+//FORK PHASE 3
+//________________________________________________________________________________
 	processCountInThisPhase = processCountPerPhase[atPhase++];
 	
 	for(i = 0 ; i < processCountInThisPhase ; ++i)
@@ -205,7 +247,12 @@ int main()
 			childProcesses[processno++] = isParentProcess = fork();
 		}
 	}
+//________________________________________________________________________________
+
 	
+//________________________________________________________________________________
+//SEARCH
+//________________________________________________________________________________
 	
 	t = clock();
 	// Launch threads for search
@@ -227,26 +274,30 @@ int main()
 	t = clock() - t;
 	time_taken = ((double)t)/CLOCKS_PER_SEC;
 	
-	printf("\nTime taken to search %d strings by %d threads = %f\n", insertion_count_per_process, NUMBER_OF_THREADS_PER_PROCESS, time_taken);
-	
+	printf("\nTime taken to search %d strings by %d threads = %Lf\n", insertion_count_per_process, NUMBER_OF_THREADS_PER_PROCESS, time_taken);
+//________________________________________________________________________________
 	
 	if (flag)
 	{
 		printf("\nTest failed, check errors.log\n");
 	}
 	
-	
+//________________________________________________________________________________
+//WAIT FOR CHILD PROCESSES
+//________________________________________________________________________________
 	if(isParentProcess)
 	{
 		for (i = 0 ; i < NUMBER_OF_PROCESSES - 1 ; ++i)
 		{
-			waitpid(childProcesses[i], NULL , 0);
+			waitpid(childProcesses[i], NULL, 0);
 		}
 		
-		struct SharedMemoryManager managerForSize = getAppointedManager();
+		size_t realFileSizeUsed = __dtsharedmemory_getUsedSharedMemorySize();
 		
-		printf("\nShared memory size used after all processes ended = %zu\n\n",  managerForSize.statusFile_mmap_base->writeFromOffset);
+		
+		printf("\nShared memory size used after all processes ended = %zu\n\n", realFileSizeUsed);
 	}
+//________________________________________________________________________________
 	
 }
 
@@ -255,7 +306,7 @@ void prepareThreadArguments(struct PathData *argsToThreads, int number_of_string
 	int i;
 	
 	argsToThreads->number_of_strings = number_of_strings;
-	argsToThreads->path = (unsigned char **)malloc( sizeof(unsigned char *) * number_of_strings);
+	argsToThreads->path = (char **)malloc( sizeof(char *) * number_of_strings);
 	argsToThreads->pathPersmission = (bool *)malloc( sizeof(bool) * number_of_strings);
 	
 	if (argsToThreads->path == NULL) {
@@ -275,12 +326,12 @@ void prepareThreadArguments(struct PathData *argsToThreads, int number_of_string
 
 }
 
-unsigned char *get_random_string(int minLength, int maxLength)
+char *get_random_string(int minLength, int maxLength)
 {
 
 	int strSize = (rand() % maxLength) + minLength;
 	
-	unsigned char *random_string = (unsigned char *)malloc(sizeof(unsigned char) * (strSize + 2) );
+	char *random_string = (char *)malloc(sizeof(char) * (strSize + 2) );
 	
 	if (random_string == NULL) {
 		print_error("null");
@@ -292,9 +343,9 @@ unsigned char *get_random_string(int minLength, int maxLength)
 	
 	for (i = 0 ; i < strSize ; ++i)
 	{
-		do{
-			random_char = (rand() % 96) + 32;
-		}while(!random_char);
+		
+		random_char = (rand() % POSSIBLE_CHARACTERS) + LOWER_LIMIT;
+		random_char = !random_char ? 1 : random_char; //shifting coz don't want 0, which is '\0'
 		random_string[i] = random_char;
 	}
 	
