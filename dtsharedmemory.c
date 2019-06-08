@@ -22,9 +22,9 @@
 
 
 #ifdef HAVE_STDATOMIC_H
-static	_Atomic(struct SharedMemoryManager *)	manager = NULL;
+	static	_Atomic(struct SharedMemoryManager *)	manager = NULL;
 #else
-static			struct SharedMemoryManager *	manager = NULL;
+	static			struct SharedMemoryManager *	manager = NULL;
 #endif
 
 
@@ -37,10 +37,10 @@ static			struct SharedMemoryManager *	manager = NULL;
 #if HAVE_DECL_ATOMIC_COMPARE_EXCHANGE_STRONG_EXPLICIT
 
 #	define CAS_ptr(old, new, mem) \
-atomic_compare_exchange_strong_explicit(mem, old, new, memory_order_relaxed, memory_order_relaxed)
+	atomic_compare_exchange_strong_explicit(mem, old, new, memory_order_relaxed, memory_order_relaxed)
 
 #	define CAS_size_t(old, new, mem) \
-atomic_compare_exchange_strong_explicit(mem, old, new, memory_order_relaxed, memory_order_relaxed)
+	atomic_compare_exchange_strong_explicit(mem, old, new, memory_order_relaxed, memory_order_relaxed)
 
 
 #elif \
@@ -51,15 +51,15 @@ defined(HAVE_OSATOMICCOMPAREANDSWAPPTR) && \
 )
 
 #	define CAS_ptr(old, new, mem) \
-OSAtomicCompareAndSwapPtr((void *) (*old), (void *)new, (void* volatile *)mem)
+	OSAtomicCompareAndSwapPtr((void *) (*old), (void *)new, (void* volatile *)mem)
 
 //If 64 bit machine, use 64 bit CAS for size_t else 32 bit CAS
 #	ifdef __LP64__
 #		define CAS_size_t(old, new, mem) \
-OSAtomicCompareAndSwap64((int64_t) (*old), (int64_t) (new), (volatile int64_t *) (mem))
+		OSAtomicCompareAndSwap64((int64_t) (*old), (int64_t) (new), (volatile int64_t *) (mem))
 #	else
 #		define CAS_size_t(old, new, mem) \
-OSAtomicCompareAndSwap32((int32_t) (*old), (int32_t) (new), (volatile int32_t *) (mem))
+		OSAtomicCompareAndSwap32((int32_t) (*old), (int32_t) (new), (volatile int32_t *) (mem))
 #	endif
 
 #else
@@ -76,7 +76,7 @@ OSAtomicCompareAndSwap32((int32_t) (*old), (int32_t) (new), (volatile int32_t *)
  *	While dealing with bitmaps, typecasting is necessary otherwise it leads to errors.
  **/
 #define setBitmapAtIndex(bitmap, indexForBitmap) \
-(bitmap | ((size_t)1 << indexForBitmap))
+	(bitmap | ((size_t)1 << indexForBitmap))
 
 
 
@@ -85,7 +85,7 @@ OSAtomicCompareAndSwap32((int32_t) (*old), (int32_t) (new), (volatile int32_t *)
  *	While dealing with bitmaps, typecasting is necessary otherwise it leads to errors.
  **/
 #define unsetBitmapAtIndex(bitmap, indexForBitmap) \
-(bitmap & ~( (size_t)1 << indexForBitmap ))
+	(bitmap & ~( (size_t)1 << indexForBitmap ))
 
 
 
@@ -94,7 +94,7 @@ OSAtomicCompareAndSwap32((int32_t) (*old), (int32_t) (new), (volatile int32_t *)
  *	While dealing with bitmaps, typecasting is necessary otherwise it leads to errors.
  **/
 #define getBitmapAtIndex(bitmap, indexForBitmap) \
-((bitmap >> indexForBitmap) & (size_t)1)
+	((bitmap >> indexForBitmap) & (size_t)1)
 
 
 
