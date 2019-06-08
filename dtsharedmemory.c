@@ -11,20 +11,20 @@
 
 
 #ifdef HAVE_STDATOMIC_H
-	#include <stdatomic.h>
+#include <stdatomic.h>
 #endif
 
 #ifdef HAVE_LIBKERN_OSATOMIC_H
-	#include <libkern/OSAtomic.h>
+#include <libkern/OSAtomic.h>
 #endif
 
 
 
 
 #ifdef HAVE_STDATOMIC_H
-	static 	_Atomic(struct SharedMemoryManager *) 	manager = NULL;
+static	_Atomic(struct SharedMemoryManager *)	manager = NULL;
 #else
-	static 			struct SharedMemoryManager *	manager = NULL;
+static			struct SharedMemoryManager *	manager = NULL;
 #endif
 
 
@@ -34,14 +34,13 @@
 
 
 
-
 #if HAVE_DECL_ATOMIC_COMPARE_EXCHANGE_STRONG_EXPLICIT
 
 #	define CAS_ptr(old, new, mem) \
-	atomic_compare_exchange_strong_explicit(mem, old, new, memory_order_relaxed, memory_order_relaxed)
+atomic_compare_exchange_strong_explicit(mem, old, new, memory_order_relaxed, memory_order_relaxed)
 
 #	define CAS_size_t(old, new, mem) \
-	atomic_compare_exchange_strong_explicit(mem, old, new, memory_order_relaxed, memory_order_relaxed)
+atomic_compare_exchange_strong_explicit(mem, old, new, memory_order_relaxed, memory_order_relaxed)
 
 
 #elif \
@@ -52,15 +51,15 @@ defined(HAVE_OSATOMICCOMPAREANDSWAPPTR) && \
 )
 
 #	define CAS_ptr(old, new, mem) \
-	OSAtomicCompareAndSwapPtr((void *) (*old), (void *)new, (void* volatile *)mem)
+OSAtomicCompareAndSwapPtr((void *) (*old), (void *)new, (void* volatile *)mem)
 
 //If 64 bit machine, use 64 bit CAS for size_t else 32 bit CAS
 #	ifdef __LP64__
 #		define CAS_size_t(old, new, mem) \
-		OSAtomicCompareAndSwap64((int64_t) (*old), (int64_t) (new), (volatile int64_t *) (mem))
+OSAtomicCompareAndSwap64((int64_t) (*old), (int64_t) (new), (volatile int64_t *) (mem))
 #	else
 #		define CAS_size_t(old, new, mem) \
-		OSAtomicCompareAndSwap32((int32_t) (*old), (int32_t) (new), (volatile int32_t *) (mem))
+OSAtomicCompareAndSwap32((int32_t) (*old), (int32_t) (new), (volatile int32_t *) (mem))
 #	endif
 
 #else
@@ -77,7 +76,7 @@ defined(HAVE_OSATOMICCOMPAREANDSWAPPTR) && \
  *	While dealing with bitmaps, typecasting is necessary otherwise it leads to errors.
  **/
 #define setBitmapAtIndex(bitmap, indexForBitmap) \
-	(bitmap | ((size_t)1 << indexForBitmap))
+(bitmap | ((size_t)1 << indexForBitmap))
 
 
 
@@ -86,7 +85,7 @@ defined(HAVE_OSATOMICCOMPAREANDSWAPPTR) && \
  *	While dealing with bitmaps, typecasting is necessary otherwise it leads to errors.
  **/
 #define unsetBitmapAtIndex(bitmap, indexForBitmap) \
-	(bitmap & ~( (size_t)1 << indexForBitmap ))
+(bitmap & ~( (size_t)1 << indexForBitmap ))
 
 
 
@@ -95,7 +94,7 @@ defined(HAVE_OSATOMICCOMPAREANDSWAPPTR) && \
  *	While dealing with bitmaps, typecasting is necessary otherwise it leads to errors.
  **/
 #define getBitmapAtIndex(bitmap, indexForBitmap) \
-	((bitmap >> indexForBitmap) & (size_t)1)
+((bitmap >> indexForBitmap) & (size_t)1)
 
 
 
@@ -182,11 +181,8 @@ defined(HAVE_OSATOMICCOMPAREANDSWAPPTR) && \
 
 
 //Prototypes #START#
+//if vim, press % on '{' to reach end of prototypes
 //{
-
-//Main function's prototypes #START#
-// {
-
 
 /**
  *
@@ -291,12 +287,6 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission);
 bool __dtsharedmemory_search(const char *path, bool *pathPermission);
 
 
-
-// }
-//Main functions prototypes #END#
-
-//Support functions prototypes #START#
-// {
 
 /**
  *
@@ -461,7 +451,7 @@ bool createUpdatedCNodeCopy(CNode *copy, CNode cNodeToBeCopied, int newIndexForB
  *		new offset contains updated bitmap. Meanwhile the (3rd thread)3rd node
  *		recycled the offset dumped by the 2nd node and CASd it to be child of current parent.
  *		Bitmap has got updations from 2nd and 3rd child node.
- *		Now when 1st node will attemp to CAS, it will find the oldValue
+ *		Now when 1st node will attempt to CAS, it will find the oldValue
  *		and the actual value to be equal, because 3rd node reused old offset,
  *		but the new value 1st node replaces don't contain bitmap entries set by
  *		2nd and 3rd node leading to data loss.
@@ -511,16 +501,13 @@ bool dumpWastedMemory(size_t wastedOffset, size_t parentINode);
 bool recycleWastedMemory(size_t *reusableOffset, size_t parentINode);
 #endif
 
-// }
-//Support functions prototypes #END#
-
 //}
 //Prototypes #END#
 
 
 bool __dtsharedmemory_set_manager(const char *status_file_name, const char *shared_memory_file_name)
 {
-
+	
 	//Global(manager) is already set
 	if(manager != NULL)
 		return true;
@@ -559,7 +546,7 @@ bool __dtsharedmemory_set_manager(const char *status_file_name, const char *shar
 		
 		
 		if(old_manager != NULL)
-		//Global(manager) was set by some other thread
+			//Global(manager) was set by some other thread
 		{
 			munmap(
 				   new_manager->sharedMemoryFile_mmap_base,
@@ -617,38 +604,38 @@ bool openStatusFile(struct SharedMemoryManager *new_manager, const char *status_
 		//Yea, it does nothing
 	}
 	else
-	if(statusFile.fd == -1 && (access(statusFile.name, F_OK) == -1))
-	//File doesn't exist
-	{
-		//Create file
-		//Doesn't overwrite existing file because O_EXCL is added in flags.
-		statusFile.fd = open(statusFile.name, O_CREAT | O_EXCL | O_TRUNC | O_RDWR, FILE_PERMISSIONS);
-		
-		if(statusFile.fd == -1)
+		if(statusFile.fd == -1 && (access(statusFile.name, F_OK) == -1))
+			//File doesn't exist
 		{
-			//Some other thread or process may have entered the code and created the file
-			//before this thread could. Assuming that, attempt to open the file again.
+			//Create file
+			//Doesn't overwrite existing file because O_EXCL is added in flags.
+			statusFile.fd = open(statusFile.name, O_CREAT | O_EXCL | O_TRUNC | O_RDWR, FILE_PERMISSIONS);
 			
-			statusFile.fd = open(statusFile.name, O_RDWR, FILE_PERMISSIONS);
-			FAIL_IF(statusFile.fd == -1, "open(2) failed", false);
+			if(statusFile.fd == -1)
+			{
+				//Some other thread or process may have entered the code and created the file
+				//before this thread could. Assuming that, attempt to open the file again.
+				
+				statusFile.fd = open(statusFile.name, O_RDWR, FILE_PERMISSIONS);
+				FAIL_IF(statusFile.fd == -1, "open(2) failed", false);
+			}
 		}
-	}
-	else
-	if(statusFile.fd == -1)
-	{
-		/*
-		 *Its is possible that file was created just before access(2) was called in
-		 *the above `if` condition so trying to open again
-		 */
-		statusFile.fd = open(statusFile.name, O_RDWR, FILE_PERMISSIONS);
-		FAIL_IF(statusFile.fd == -1, "open(2) failed", false);
-		
-	}
-	else
-	{
-		print_error("Unknown error! File descriptor negative but not -1");
-		return false;
-	}
+		else
+			if(statusFile.fd == -1)
+			{
+				/*
+				 *Its is possible that file was created just before access(2) was called in
+				 *the above `if` condition so trying to open again
+				 */
+				statusFile.fd = open(statusFile.name, O_RDWR, FILE_PERMISSIONS);
+				FAIL_IF(statusFile.fd == -1, "open(2) failed", false);
+				
+			}
+			else
+			{
+				print_error("Unknown error! File descriptor negative but not -1");
+				return false;
+			}
 	
 	
 	if (statusFile.fd >= 0)
@@ -682,14 +669,14 @@ bool openStatusFile(struct SharedMemoryManager *new_manager, const char *status_
 	
 	
 	
-//	As the file size is expanded by truncate(2) which fills the file with '\0',
-//	sharedMemoryFileSize and writeFromOffset are initially 0.
+	//	As the file size is expanded by truncate(2) which fills the file with '\0',
+	//	sharedMemoryFileSize and writeFromOffset are initially 0.
 	
-//	Whichever thread or process opens the status file, needs to check for
-//	new_manager->statusFile_mmap_base->sharedMemoryFileSize and
-//	new_manager->statusFile_mmap_base->writeFromOffset.
-//	If these two are found 0, replace them with appropriate initial values.
-
+	//	Whichever thread or process opens the status file, needs to check for
+	//	new_manager->statusFile_mmap_base->sharedMemoryFileSize and
+	//	new_manager->statusFile_mmap_base->writeFromOffset.
+	//	If these two are found 0, replace them with appropriate initial values.
+	
 	size_t oldValue, newValue;
 	
 	oldValue = 0;
@@ -697,7 +684,7 @@ bool openStatusFile(struct SharedMemoryManager *new_manager, const char *status_
 	
 	//Should always be more than at least ROOT_SIZE
 	FAIL_IF(newValue < ROOT_SIZE, "INITIAL_FILE_SIZE is too less", false);
-
+	
 	
 	result = CAS_size_t(
 						&oldValue,
@@ -717,11 +704,11 @@ bool openStatusFile(struct SharedMemoryManager *new_manager, const char *status_
 						&(new_manager->statusFile_mmap_base->writeFromOffset)
 						);
 	
-
-	FAIL_IF(new_manager->statusFile_mmap_base->writeFromOffset == 0, "CAS for writeFromOffset failed", false);
-
 	
-
+	FAIL_IF(new_manager->statusFile_mmap_base->writeFromOffset == 0, "CAS for writeFromOffset failed", false);
+	
+	
+	
 	return true;
 	
 }
@@ -730,7 +717,7 @@ bool openStatusFile(struct SharedMemoryManager *new_manager, const char *status_
 
 bool openSharedMemoryFile(struct SharedMemoryManager *new_manager, const char *shared_memory_file_name)
 {
-
+	
 	FAIL_IF(new_manager == NULL, "Arg(new_manager) is NULL", false);
 	FAIL_IF(shared_memory_file_name == NULL || *shared_memory_file_name == '\0', "Invalid name for shared memory file", false);
 	
@@ -757,38 +744,38 @@ bool openSharedMemoryFile(struct SharedMemoryManager *new_manager, const char *s
 		//Yea, it does nothing
 	}
 	else
-	if(sharedMemoryFile.fd == -1 && (access(sharedMemoryFile.name, F_OK) == -1))
-	//File doesn't exist
-	{
-		//Create file
-		//Doesn't overwrite existing file because O_EXCL is added in flags.
-		sharedMemoryFile.fd = open(sharedMemoryFile.name, O_CREAT | O_EXCL | O_TRUNC | O_RDWR, FILE_PERMISSIONS);
-		
-		if(sharedMemoryFile.fd == -1)
+		if(sharedMemoryFile.fd == -1 && (access(sharedMemoryFile.name, F_OK) == -1))
+			//File doesn't exist
 		{
-			//Some other thread or process may have entered the code and created the file
-			//before this thread could. Assuming that, attempt to open the file again.
+			//Create file
+			//Doesn't overwrite existing file because O_EXCL is added in flags.
+			sharedMemoryFile.fd = open(sharedMemoryFile.name, O_CREAT | O_EXCL | O_TRUNC | O_RDWR, FILE_PERMISSIONS);
 			
-			sharedMemoryFile.fd = open(sharedMemoryFile.name, O_RDWR, FILE_PERMISSIONS);
-			FAIL_IF(sharedMemoryFile.fd == -1, "open(2) failed", false);
-		}
-	}
-	else
-	if(sharedMemoryFile.fd == -1)
-	{
-		/*
-		 *Its is possible that file was created just before access(2) was called in
-		 *the above `if` condition so trying to open again
-		 */
-		sharedMemoryFile.fd = open(sharedMemoryFile.name, O_RDWR, FILE_PERMISSIONS);
-		FAIL_IF(sharedMemoryFile.fd == -1, "open(2) failed", false);
+			if(sharedMemoryFile.fd == -1)
+			{
+				//Some other thread or process may have entered the code and created the file
+				//before this thread could. Assuming that, attempt to open the file again.
 				
-	}
-	else
-	{
-		print_error("Unknown error! File descriptor negative but not -1");
-		return false;
-	}
+				sharedMemoryFile.fd = open(sharedMemoryFile.name, O_RDWR, FILE_PERMISSIONS);
+				FAIL_IF(sharedMemoryFile.fd == -1, "open(2) failed", false);
+			}
+		}
+		else
+			if(sharedMemoryFile.fd == -1)
+			{
+				/*
+				 *Its is possible that file was created just before access(2) was called in
+				 *the above `if` condition so trying to open again
+				 */
+				sharedMemoryFile.fd = open(sharedMemoryFile.name, O_RDWR, FILE_PERMISSIONS);
+				FAIL_IF(sharedMemoryFile.fd == -1, "open(2) failed", false);
+				
+			}
+			else
+			{
+				print_error("Unknown error! File descriptor negative but not -1");
+				return false;
+			}
 	
 	
 	
@@ -805,12 +792,7 @@ bool openSharedMemoryFile(struct SharedMemoryManager *new_manager, const char *s
 			//This truncate(2) can cause conflicts with expandSharedMemory()
 			//in some rare cases. To handle such cases, we just expand to the greater
 			//of the two.
-			result = truncate(sharedMemoryFile.name,
-							  (
-							   sharedMemoryFile.size > EXPANDING_SIZE
-							   ? sharedMemoryFile.size : EXPANDING_SIZE
-							   )
-							  );
+			result = truncate(sharedMemoryFile.name, sharedMemoryFile.size);
 			FAIL_IF(result == -1, "truncate(2) failed", false);
 		}
 		
@@ -833,10 +815,10 @@ bool openSharedMemoryFile(struct SharedMemoryManager *new_manager, const char *s
 	
 	
 	
-//	If rootINode->mainNode is 0, need to initialise it.
-//	It will be 0 the first time of this CAS because file is given its size
-//	through truncate(2), which fills file with '\0'.
-//	Every thread opening this file needs to make this check.
+	//	If rootINode->mainNode is 0, need to initialise it.
+	//	It will be 0 the first time of this CAS because file is given its size
+	//	through truncate(2), which fills file with '\0'.
+	//	Every thread opening this file needs to make this check.
 	
 	size_t oldValue, newValue;
 	
@@ -861,7 +843,7 @@ bool openSharedMemoryFile(struct SharedMemoryManager *new_manager, const char *s
 
 bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 {
-
+	
 	FAIL_IF(manager == NULL, "Global(manager) is NULL", false);
 	FAIL_IF(path == NULL, "Arg(path) is NULL", false);
 	
@@ -886,7 +868,7 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 	bool entryFor_pathCharacter_alreadyExists ;
 	bool bitmapFor_pathCharacter;
 	bool isEndOfString;
-
+	
 	for (level = 0 ; *(path + level) != '\0' ; ++level)
 	{
 		
@@ -894,7 +876,7 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 		
 		FAIL_IF(pathCharacter > (uint8_t)UPPER_LIMIT, "Not accepting characters above UPPER_LIMIT", false);
 		FAIL_IF(pathCharacter < (uint8_t)LOWER_LIMIT, "Not accepting characters below LOWER_LIMIT", false);
-
+		
 		bitmapIndex  = (pathCharacter - LOWER_LIMIT) / NO_OF_BITS;
 		bitmapOffset = (pathCharacter - LOWER_LIMIT) % NO_OF_BITS;
 		
@@ -906,15 +888,15 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 		
 		GUARD_CNODE_ACCESS(
 						   
-			bitmapFor_pathCharacter =
+						   bitmapFor_pathCharacter =
 						   getBitmapAtIndex(currentCNode->bitmap[bitmapIndex], bitmapOffset);
+						   
+						   )
 		
-		)
-			   
 		
 		if ( bitmapFor_pathCharacter == false )
 		{
-
+			
 			/**
 			 *	Entering this if block means the node doesn't contain pathCharacter
 			 *	This block would create a copy of currentCNode with updated values
@@ -923,7 +905,7 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 			
 			
 #if !(DISABLE_DUMPING_AND_RECYCLING)
-
+			
 			result = recycleWastedMemory(&offsetToCopiedChildCNode, traverser);
 			
 			if (!result)
@@ -940,7 +922,7 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 			FAIL_IF(!result, "Failed to insert new node", false);
 			
 			copiedCNode = GOTO_OFFSET(offsetToCopiedChildCNode);
-	
+			
 			entryFor_pathCharacter_alreadyExists = false;
 			
 			do
@@ -950,10 +932,10 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 				
 				GUARD_CNODE_ACCESS(
 								   
-					bitmapFor_pathCharacter =
+								   bitmapFor_pathCharacter =
 								   getBitmapAtIndex(currentCNode->bitmap[bitmapIndex], bitmapOffset);
 								   
-				)
+								   )
 				
 				if ( bitmapFor_pathCharacter == true )
 				{
@@ -971,15 +953,15 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 				}
 				
 				newValue = offsetToCopiedChildCNode;
-			
+				
 				//Need not be inside GUARD_CNODE_ACCESS because if the CNode changes,
 				//cas will fail anyway
 				tempCNode = *currentCNode;
 				
 				result = createUpdatedCNodeCopy(copiedCNode, tempCNode, pathCharacter, tempCNode.isEndOfString, tempCNode.pathPermission);
-	
+				
 				FAIL_IF(!result, "Failed to update CNode", false);
-
+				
 				
 			} while (
 					 !CAS_size_t(
@@ -997,16 +979,16 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 				dumpWastedMemory(oldValue, traverser);
 #endif
 				currentCNode = copiedCNode;
-
+				
 			}
 			
 		}
 		
 		GUARD_CNODE_ACCESS(
 						   
-			traverser = currentCNode->possibilities[pathCharacter - LOWER_LIMIT];
-		
-		)
+						   traverser = currentCNode->possibilities[pathCharacter - LOWER_LIMIT];
+						   
+						   )
 		
 	}
 	
@@ -1015,16 +997,16 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 	FAIL_IF(!currentINode, "currentINode found NULL", false);
 	
 	GUARD_CNODE_ACCESS(
-	
-		isEndOfString = currentCNode->isEndOfString;
 					   
-	)
+					   isEndOfString = currentCNode->isEndOfString;
+					   
+					   )
 	
 	//String already exists in shared memory
 	if (isEndOfString == true)
 		return true;
 	
-
+	
 #if !(DISABLE_DUMPING_AND_RECYCLING)
 	
 	result = recycleWastedMemory(&offsetToCopiedChildCNode, traverser);
@@ -1037,7 +1019,7 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 #else
 	
 	result = reserveSpaceInSharedMemory(sizeof(CNode), &offsetToCopiedChildCNode);
-
+	
 #endif
 	
 	FAIL_IF(!result, "Failed to insert new node", false);
@@ -1080,7 +1062,7 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 
 bool __dtsharedmemory_search(const char *path, bool *pathPermission)
 {
-
+	
 	FAIL_IF(manager == NULL, "Global(manager) is NULL", false);
 	FAIL_IF(path == NULL, "Arg(path) is NULL", false);
 	
@@ -1096,12 +1078,12 @@ bool __dtsharedmemory_search(const char *path, bool *pathPermission)
 	
 	int bitmapIndex, bitmapOffset;
 	bool bitmapFor_pathCharacter;
-
+	
 	for (level = 0 ; *(path + level) != '\0' ; ++level)
 	{
 		
 		pathCharacter = *(path + level);
-
+		
 		FAIL_IF(pathCharacter > (uint8_t)UPPER_LIMIT, "Not accepting characters above UPPER_LIMIT", false);
 		FAIL_IF(pathCharacter < (uint8_t)LOWER_LIMIT, "Not accepting characters below LOWER_LIMIT", false);
 		
@@ -1111,13 +1093,13 @@ bool __dtsharedmemory_search(const char *path, bool *pathPermission)
 		currentINode = GOTO_OFFSET(traverser);
 		
 		FAIL_IF(!currentINode, "currentINode found NULL", false);
-	
+		
 		GUARD_CNODE_ACCESS(
 						   
-				bitmapFor_pathCharacter =
+						   bitmapFor_pathCharacter =
 						   getBitmapAtIndex(currentCNode->bitmap[bitmapIndex], bitmapOffset);
 						   
-		)
+						   )
 		
 		if ( bitmapFor_pathCharacter == false )
 		{
@@ -1125,13 +1107,13 @@ bool __dtsharedmemory_search(const char *path, bool *pathPermission)
 			return false;
 		}
 		
-
+		
 		GUARD_CNODE_ACCESS(
 						   
-			traverser = currentCNode->possibilities[pathCharacter - LOWER_LIMIT];
+						   traverser = currentCNode->possibilities[pathCharacter - LOWER_LIMIT];
 						   
-		)
-
+						   )
+		
 	}
 	
 	currentINode = GOTO_OFFSET(traverser);
@@ -1140,11 +1122,11 @@ bool __dtsharedmemory_search(const char *path, bool *pathPermission)
 	
 	GUARD_CNODE_ACCESS(
 					   
-		*pathPermission = currentCNode->pathPermission;
-		isEndOfString = currentCNode->isEndOfString;
-
-	)
-
+					   *pathPermission = currentCNode->pathPermission;
+					   isEndOfString = currentCNode->isEndOfString;
+					   
+					   )
+	
 	return isEndOfString;
 }
 
@@ -1173,7 +1155,7 @@ bool reserveSpaceInSharedMemory(size_t bytesToBeReserverd, size_t *reservedOffse
 		
 		
 		if (newValue > manager->sharedMemoryFile_mapping_size)
-		//Need to increase mapping size
+			//Need to increase mapping size
 		{
 			do
 			{
@@ -1404,8 +1386,8 @@ size_t __dtsharedmemory_getUsedSharedMemorySize()
 bool __dtsharedmemory_reset_fd()
 {
 	
-    //returns true because fd need not be reset and in dup2(2)
-    //no need to fail the dup2(2) called by the process
+	//returns true because fd need not be reset and in dup2(2)
+	//no need to fail the dup2(2) called by the process
 	FAIL_IF(manager == NULL, "Global(manager) is NULL", true);
 	
 	struct SharedMemoryManager *old_manager, *new_manager;
@@ -1455,8 +1437,9 @@ bool dumpWastedMemory(size_t wastedOffset, size_t parentINode)
 	size_t oldBitmap, newBitmap;
 	int bitmapIndex, bitmapOffset;
 	bool isFull;
-
-	++ wastedOffset; //To make it go to an odd offset
+	
+	++ wastedOffset;
+	//To make it go to an odd offset
 	//Its a unique property of recycled offsets that they are always odd.
 	//This is because an offset can not be dumped twice, so if it is gonna get dumped the
 	//second time, it gets even and is rejected by the next `if` statement.
@@ -1470,21 +1453,21 @@ bool dumpWastedMemory(size_t wastedOffset, size_t parentINode)
 	{
 		return false;
 	}
-
+	
 	
 	do
 	{
-
+		
 		isFull = true;
-
+		
 		for (i = 0 ; i < DUMP_YARD_SIZE ; ++i)
 		{
-
+			
 			bitmapIndex 	= i / NO_OF_BITS;
 			bitmapOffset 	= i % NO_OF_BITS;
-
+			
 			oldBitmap = manager->statusFile_mmap_base->bitmapForDumping[bitmapIndex];
-
+			
 			if (getBitmapAtIndex(oldBitmap, bitmapOffset) == false)
 			{
 				newBitmap	= setBitmapAtIndex(oldBitmap, bitmapOffset);
@@ -1492,11 +1475,11 @@ bool dumpWastedMemory(size_t wastedOffset, size_t parentINode)
 				break;
 			}
 		}
-
+		
 		//Wasted memory dump yard full
 		if (isFull)
 			return false;
-
+		
 	} while(
 			!CAS_size_t(
 						&oldBitmap,
@@ -1505,17 +1488,17 @@ bool dumpWastedMemory(size_t wastedOffset, size_t parentINode)
 						)
 			);
 	
-
+	
 	manager->statusFile_mmap_base->wastedMemoryDumpYard[i] = wastedOffset;
 	manager->statusFile_mmap_base->parentINodesOfDumper[i] = parentINode;
-
+	
 	
 	do
 	{
-
+		
 		oldBitmap 		= manager->statusFile_mmap_base->bitmapForRecycling[bitmapIndex];
 		newBitmap		= setBitmapAtIndex(oldBitmap, bitmapOffset);
-
+		
 	} while (
 			 !CAS_size_t(
 						 &oldBitmap,
@@ -1523,36 +1506,36 @@ bool dumpWastedMemory(size_t wastedOffset, size_t parentINode)
 						 &(manager->statusFile_mmap_base->bitmapForRecycling[bitmapIndex])
 						 )
 			 );
-
+	
 	return true;
-
+	
 }
 
 
 
 bool recycleWastedMemory(size_t *reusableOffset, size_t parentINode)
 {
-
+	
 	FAIL_IF(manager == NULL, "Global(manager) is NULL", false);
 	
 	int i;
 	size_t oldBitmap, newBitmap, parentINodeOfDumper;
 	int bitmapIndex, bitmapOffset;
 	bool isEmpty = true;
-
-
+	
+	
 	do
 	{
 		isEmpty = true;
-
+		
 		for (i = 0 ; i < DUMP_YARD_SIZE ; ++i)
 		{
-
+			
 			bitmapIndex 	= i / NO_OF_BITS;
 			bitmapOffset 	= i % NO_OF_BITS;
-
+			
 			oldBitmap = manager->statusFile_mmap_base->bitmapForRecycling[bitmapIndex];
-
+			
 			if (getBitmapAtIndex(oldBitmap, bitmapOffset) == true)
 			{
 				newBitmap	= unsetBitmapAtIndex(oldBitmap, bitmapOffset);
@@ -1560,11 +1543,11 @@ bool recycleWastedMemory(size_t *reusableOffset, size_t parentINode)
 				break;
 			}
 		}
-
+		
 		//Wasted memory dump yard empty
 		if (isEmpty)
 			return false;
-
+		
 	} while(
 			!CAS_size_t(
 						&oldBitmap,
@@ -1572,16 +1555,16 @@ bool recycleWastedMemory(size_t *reusableOffset, size_t parentINode)
 						&(manager->statusFile_mmap_base->bitmapForRecycling[bitmapIndex])
 						)
 			);
-
+	
 	*reusableOffset		= manager->statusFile_mmap_base->wastedMemoryDumpYard[i];
 	parentINodeOfDumper	= manager->statusFile_mmap_base->parentINodesOfDumper[i];
 	manager->statusFile_mmap_base->wastedMemoryDumpYard[i] = 0;
-
+	
 	do
 	{
 		oldBitmap 		= manager->statusFile_mmap_base->bitmapForDumping[bitmapIndex];
 		newBitmap		= unsetBitmapAtIndex(oldBitmap, bitmapOffset);
-
+		
 	} while (
 			 !CAS_size_t(
 						 &oldBitmap,
@@ -1589,15 +1572,15 @@ bool recycleWastedMemory(size_t *reusableOffset, size_t parentINode)
 						 &(manager->statusFile_mmap_base->bitmapForDumping[bitmapIndex])
 						 )
 			 );
-
+	
 	if (parentINode == parentINodeOfDumper)
 	{
 		dumpWastedMemory(*reusableOffset - 1, parentINode);
 		return false;
 	}
-
+	
 	return true;
-
+	
 }
 
 #endif

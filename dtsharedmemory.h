@@ -106,7 +106,7 @@
  *	to function correctly. 
  *
  */
-#define INITIAL_FILE_SIZE 	MB(10) //Keep it greater than sizeof(CNode)+sizeof(INode)
+#define INITIAL_FILE_SIZE 	MB(20) //Keep it greater than sizeof(CNode)+sizeof(INode)
 
 #define EXPANDING_SIZE 		MB(20)
 
@@ -231,33 +231,47 @@ struct SharedMemoryManager{
 struct SharedMemoryStatus
 {
 	
-#ifdef HAVE_STDATOMIC_H
-//stdatomic.h available
-	
-	_Atomic(size_t) writeFromOffset;
-	_Atomic(size_t) sharedMemoryFileSize;
-	
 #if !(DISABLE_DUMPING_AND_RECYCLING)
-	_Atomic(size_t) wastedMemoryDumpYard [DUMP_YARD_SIZE];
-	_Atomic(size_t)	parentINodesOfDumper [DUMP_YARD_SIZE];
-	_Atomic(size_t) bitmapForDumping	 [DUMP_YARD_BITMAP_ARRAY_SIZE];
-	_Atomic(size_t) bitmapForRecycling	 [DUMP_YARD_BITMAP_ARRAY_SIZE];
-#endif
+//{
+	size_t wastedMemoryDumpYard [DUMP_YARD_SIZE];
+	size_t parentINodesOfDumper [DUMP_YARD_SIZE];
 	
+#	ifdef HAVE_STDATOMIC_H
+	//{
+		_Atomic(size_t) writeFromOffset;
+		_Atomic(size_t) sharedMemoryFileSize;
 	
+		_Atomic(size_t) bitmapForDumping	 [DUMP_YARD_BITMAP_ARRAY_SIZE];
+		_Atomic(size_t) bitmapForRecycling	 [DUMP_YARD_BITMAP_ARRAY_SIZE];
+	//}
+#	else
+	//{
+		size_t 			writeFromOffset;
+		size_t 			sharedMemoryFileSize;
 	
+		size_t 			bitmapForDumping	 [DUMP_YARD_BITMAP_ARRAY_SIZE];
+		size_t 			bitmapForRecycling	 [DUMP_YARD_BITMAP_ARRAY_SIZE];
+	//}
+#	endif
+
+//}
+
 #else
-	
-	size_t 			writeFromOffset;
-	size_t 			sharedMemoryFileSize;
-	
-#if !(DISABLE_DUMPING_AND_RECYCLING)
-	size_t 			wastedMemoryDumpYard [DUMP_YARD_SIZE];
-	size_t			parentINodesOfDumper [DUMP_YARD_SIZE];
-	size_t 			bitmapForDumping	 [DUMP_YARD_BITMAP_ARRAY_SIZE];
-	size_t 			bitmapForRecycling	 [DUMP_YARD_BITMAP_ARRAY_SIZE];
-#endif
-	
+//{
+
+#	ifdef HAVE_STDATOMIC_H
+	//{
+		_Atomic(size_t) writeFromOffset;
+		_Atomic(size_t)	sharedMemoryFileSize;
+	//}
+#	else
+	//{
+		size_t 			writeFromOffset;
+		size_t 			sharedMemoryFileSize;
+	//}
+#	endif
+
+//}
 #endif
 	
 };

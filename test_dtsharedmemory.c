@@ -166,7 +166,7 @@ int main()
 	}
 	
 	t = clock() - t;
-	time_taken = ((double)t)/CLOCKS_PER_SEC;
+	time_taken = ((long double)t)/CLOCKS_PER_SEC;
 	
 	printf("\nTime taken by __dtsharedmemory_set_manager() = %Lf\n", time_taken);
 	
@@ -184,7 +184,7 @@ int main()
 	}
 	
 	t = clock() - t;
-	time_taken = ((double)t)/CLOCKS_PER_SEC;
+	time_taken = ((long double)t)/CLOCKS_PER_SEC;
 	
 	printf("\nTime taken by second call to __dtsharedmemory_set_manager() = %Lf\n", time_taken);
 //________________________________________________________________________________
@@ -229,7 +229,7 @@ int main()
 
 	
 	t = clock() - t;
-	time_taken = ((double)t)/CLOCKS_PER_SEC;
+	time_taken = ((long double)t)/CLOCKS_PER_SEC;
 	
 	printf("\nIn process %d Time taken to insert %d strings by %d threads = %Lf\n", getpid(), insertion_count_per_process, NUMBER_OF_THREADS_PER_PROCESS, time_taken);
 //________________________________________________________________________________
@@ -272,7 +272,7 @@ int main()
 	}
 	
 	t = clock() - t;
-	time_taken = ((double)t)/CLOCKS_PER_SEC;
+	time_taken = ((long double)t)/CLOCKS_PER_SEC;
 	
 	printf("\nTime taken to search %d strings by %d threads = %Lf\n", insertion_count_per_process, NUMBER_OF_THREADS_PER_PROCESS, time_taken);
 //________________________________________________________________________________
