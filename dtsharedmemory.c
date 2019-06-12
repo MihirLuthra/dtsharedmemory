@@ -1147,7 +1147,7 @@ bool reserveSpaceInSharedMemory(size_t bytesToBeReserverd, size_t *reservedOffse
 		//by adding 1. PADDING_BYTES create extra space so 1 can be added to recycled offsets.
 		newValue = oldValue + bytesToBeReserverd + PADDING_BYTES;
 		
-#if (LARGE_MEMORY_NEEDED && 0)
+#if (LARGE_MEMORY_NEEDED && 1)
 		FAIL_IF(newValue >= UINT32_MAX, "Set LARGE_MEMORY_NEEDED to 1 in dtsharedmemory.h to use more memory", false);
 #endif
 		
