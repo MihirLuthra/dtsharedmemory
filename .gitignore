@@ -3,5 +3,3 @@ macports-dtsm-*
 *.log
 *.so
 *.out
-.shared_Memory_Status
-.shared_Memory
