@@ -11,10 +11,10 @@
  *
  **/
 
-#define NUMBER_OF_PROCESSES 8
+#define NUMBER_OF_PROCESSES 4
 
-#define NUMBER_OF_THREADS_PER_PROCESS 2 //excluding main
-#define NUMBER_OF_STRINGS_TO_BE_INSERTED_BY_EACH_THREAD 1000
+#define NUMBER_OF_THREADS_PER_PROCESS 4 //excluding main
+#define NUMBER_OF_STRINGS_TO_BE_INSERTED_BY_EACH_THREAD 2000
 
 #define MAX_STRING_SIZE 25
 #define MIN_STRING_SIZE 20
@@ -105,8 +105,10 @@ int main()
 	
 //________________________________________________________________________________
 
+	printf("\nEXPANDING_SIZE on this machine = %zu\n", EXPANDING_SIZE);
+	
 	//subtracting num of processes forked in last phase because they don't do insert
-	printf("\nStrings to be inserted = %d\n\n", (insertion_count_per_process * (NUMBER_OF_PROCESSES - processCountPerPhase[number_of_fork_phases - 1])));
+	printf("\nStrings to be inserted = %d\n", (insertion_count_per_process * (NUMBER_OF_PROCESSES - processCountPerPhase[number_of_fork_phases - 1])));
 	
 //________________________________________________________________________________
 //FORK PHASE 1
@@ -372,7 +374,7 @@ void* pathInserter(void* arg)
 		
 		if (!result)
 		{
-			fprintf(errors_log, "\n %s : Insertion failed\n\n", pathToBeInserted->path[i]);
+			fprintf(errors_log, "[%s] : Insertion failed for - %s\n", __FILE__, pathToBeInserted->path[i]);
 			flag = true;
 		}
 	}
