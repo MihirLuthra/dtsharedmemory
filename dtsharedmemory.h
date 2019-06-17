@@ -94,13 +94,13 @@
 
 #define KB(x) (x * 1024)
 #define MB(x) (x * 1024 * 1024)
-#define GB(x) (x * 1024 * 1024 * 1024)
+#define GB(x) (x * (size_t)1024 * 1024 * 1024)
 
 
 
 /*
  *	EXPANDING_SIZE should be big enough such that newSize is never made less than
- *	the current file size by ftruncate(2) and will also cause other problems.
+ *	the current file size by truncate(2) and will also cause other problems.
  *
  *	After testing till now, at least 20 MB expanding size seems necessary for the library
  *	to function correctly. 
@@ -108,7 +108,7 @@
  */
 #define INITIAL_FILE_SIZE 	MB(20) //Keep it greater than sizeof(CNode)+sizeof(INode)
 
-#define EXPANDING_SIZE 		MB(20)
+#define EXPANDING_SIZE 		(MB(10) * sysconf(_SC_NPROCESSORS_ONLN))
 
 
 
@@ -156,6 +156,16 @@ struct SharedMemoryManager{
 };
 
 
+
+#define DUMP_YARD_SIZE 64
+
+/*
+ *	The bitmap may need to store more than NO_OF_BITS bits. A size_t can only store
+ *	mapping for max system bits. So to make it possible to store more than NO_OF_BITS bit,
+ *	an array of such size_t is created whose size is given by DUMP_YARD_BITMAP_ARRAY_SIZE.
+ */
+#define DUMP_YARD_BITMAP_ARRAY_SIZE \
+((DUMP_YARD_SIZE % NO_OF_BITS == 0) ? DUMP_YARD_SIZE/NO_OF_BITS : ((DUMP_YARD_SIZE/NO_OF_BITS) + 1))
 
 /**
  *	#Member1(writeFromOffset):
@@ -223,11 +233,6 @@ struct SharedMemoryManager{
  *	"6MB" when using dumping and recycling.
  *
  **/
-#define DUMP_YARD_SIZE 64
-
-#define DUMP_YARD_BITMAP_ARRAY_SIZE \
-((DUMP_YARD_SIZE % NO_OF_BITS == 0) ? DUMP_YARD_SIZE/NO_OF_BITS : ((DUMP_YARD_SIZE/NO_OF_BITS) + 1))
-
 struct SharedMemoryStatus
 {
 	
@@ -336,9 +341,9 @@ typedef struct INode{
  *	for rare cases. Bigger size of CNode means more time taken for insertion and also
  *	shared memory expands really fast.
  */
-#define LOWER_LIMIT 0
-#define UPPER_LIMIT 128
-#define POSSIBLE_CHARACTERS (UPPER_LIMIT - LOWER_LIMIT) //The array size
+#define LOWER_LIMIT 0	//inclusive
+#define UPPER_LIMIT 128	//inclusive
+#define POSSIBLE_CHARACTERS (UPPER_LIMIT - LOWER_LIMIT + 1) //The array size
 //In a path, most frequently occuring characters are from 0 - 128,
 //considering other ascii chars just consumes more space and time while insert and search.
 
@@ -348,32 +353,13 @@ typedef struct INode{
 #endif
 
 
-/*
- *	The bitmap may need to store more than NO_OF_BITS bits. A size_t can only store
- *	mapping for max system bits. So to make it possible to store more than NO_OF_BITS bit,
- *	an array of such size_t is created whose size is given by BITMAP_ARRAY_SIZE.
- */
-#define BITMAP_ARRAY_SIZE ((POSSIBLE_CHARACTERS % NO_OF_BITS == 0) ? POSSIBLE_CHARACTERS/NO_OF_BITS : ((POSSIBLE_CHARACTERS/NO_OF_BITS) + 1))
-
-
 
 /**
  *
- *	#Member1(bitmap):
- *		An array of size_t.
- *		Depending on how big the possibilities array is, BITMAP_ARRAY_SIZE is decided.
- *		e.g., If possibilities array contains 256 elements,
- *		BITMAP_ARRAY_SIZE = 4
- *		A single element of this array stores the status of 64 possibilities.
- *		The use of bitmap makes it easy and faster to make checks.
- *		If bitmap weren't there, it would have become clumsy and time taking to
- *		initialise every possibilty by a null value whereas use of bitmap makes
- *		it simpler.
- *
- *	#Member2(possibilities):
+ *	#Member1(possibilities):
  *		This array stores offsets to next INodes for every possibility.
  *
- *	#Member3(endOfString):
+ *	#Member2(endOfString):
  *		Is set true when a node needs to represent end of string.
  *
  *	#Member4(pathPermission):
@@ -382,8 +368,6 @@ typedef struct INode{
  *
  **/
 typedef struct CNode{
-	
-	size_t 	bitmap				[BITMAP_ARRAY_SIZE];
 	
 #if (LARGE_MEMORY_NEEDED && 1)
 	size_t		possibilities	[POSSIBLE_CHARACTERS];

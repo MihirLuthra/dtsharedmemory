@@ -213,7 +213,7 @@ bool __dtsharedmemory_set_manager(const char *status_file_name, const char *shar
  *
  *	Arguments:
  *
- *	#Arg1(manager):
+ *	#Arg1(new_manager):
  *		A newly allocated `struct SharedMemoryManager` object.
  *
  *	#Arg2(status_file_name):
@@ -232,7 +232,7 @@ bool openStatusFile(struct SharedMemoryManager *new_manager, const char *status_
  *
  *	Arguments:
  *
- *	#Arg1(manager):
+ *	#Arg1(new_manager):
  *		A newly allocated `struct SharedMemoryManager` object.
  *
  *	#Arg2(shared_memory_file_name):
@@ -356,27 +356,6 @@ static inline size_t getFileSizeForFile(const char *name)
 	
 	return fileStats.st_size;
 }
-
-
-
-/**
- *
- *	Arguments:
- *
- *	#Arg2(writeFromOffset):
- *		The function will make the child INode from this offset.
- *
- *
- * #### Working of the function ####
- *
- *		This function makes a fresh INode from offset `writeFromOffset`.
- *		This function heavily relies on truncate(2)'s feature of filling the file with '\0'.
- *		(Must see function body for more accurate explanation)
- *
- **/
-void createChildINode(size_t writeFromOffset);
-
-
 
 
 /**
@@ -857,29 +836,22 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 	
 	size_t offsetToCopiedChildCNode;
 	
-	int level;
+	int currentCharacter;
 	
 	uint8_t pathCharacter;
 	
-	int bitmapIndex;
-	int bitmapOffset;
-	
 	bool result;
 	bool entryFor_pathCharacter_alreadyExists ;
-	bool bitmapFor_pathCharacter;
+	bool entryFor_pathCharacter;
 	bool isEndOfString;
 	
-	for (level = 0 ; *(path + level) != '\0' ; ++level)
+	for (currentCharacter = 0 ; *(path + currentCharacter) != '\0' ; ++currentCharacter)
 	{
 		
-		pathCharacter = *(path + level);
+		pathCharacter = *(path + currentCharacter);
 		
 		FAIL_IF(pathCharacter > (uint8_t)UPPER_LIMIT, "Not accepting characters above UPPER_LIMIT", false);
 		FAIL_IF(pathCharacter < (uint8_t)LOWER_LIMIT, "Not accepting characters below LOWER_LIMIT", false);
-		
-		bitmapIndex  = (pathCharacter - LOWER_LIMIT) / NO_OF_BITS;
-		bitmapOffset = (pathCharacter - LOWER_LIMIT) % NO_OF_BITS;
-		
 		
 		currentINode = GOTO_OFFSET(traverser);
 		
@@ -888,13 +860,12 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 		
 		GUARD_CNODE_ACCESS(
 						   
-						   bitmapFor_pathCharacter =
-						   getBitmapAtIndex(currentCNode->bitmap[bitmapIndex], bitmapOffset);
+						   entryFor_pathCharacter = currentCNode->possibilities[pathCharacter - LOWER_LIMIT];
 						   
 						   )
 		
 		
-		if ( bitmapFor_pathCharacter == false )
+		if ( entryFor_pathCharacter == false)
 		{
 			
 			/**
@@ -923,6 +894,8 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 			
 			copiedCNode = GOTO_OFFSET(offsetToCopiedChildCNode);
 			
+			FAIL_IF(!copiedCNode, "copiedCNode found NULL", false);
+			
 			entryFor_pathCharacter_alreadyExists = false;
 			
 			do
@@ -932,12 +905,11 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 				
 				GUARD_CNODE_ACCESS(
 								   
-								   bitmapFor_pathCharacter =
-								   getBitmapAtIndex(currentCNode->bitmap[bitmapIndex], bitmapOffset);
+								   entryFor_pathCharacter = currentCNode->possibilities[pathCharacter - LOWER_LIMIT];
 								   
 								   )
 				
-				if ( bitmapFor_pathCharacter == true )
+				if ( entryFor_pathCharacter )
 				{
 					//Some other thread may create a copy of the currentCNode and
 					//try to update the same bitmap entry as this thread is doing.
@@ -958,7 +930,7 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 				//cas will fail anyway
 				tempCNode = *currentCNode;
 				
-				result = createUpdatedCNodeCopy(copiedCNode, tempCNode, pathCharacter, tempCNode.isEndOfString, tempCNode.pathPermission);
+				result = createUpdatedCNodeCopy(copiedCNode, tempCNode, pathCharacter - LOWER_LIMIT, tempCNode.isEndOfString, tempCNode.pathPermission);
 				
 				FAIL_IF(!result, "Failed to update CNode", false);
 				
@@ -1026,6 +998,8 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 	
 	copiedCNode = GOTO_OFFSET(offsetToCopiedChildCNode);
 	
+	FAIL_IF(!copiedCNode, "copiedCNode found NULL", false);
+	
 	do
 	{
 		
@@ -1036,7 +1010,7 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 		//cas will fail anyway
 		tempCNode = *currentCNode;
 		
-		//-1 in the function call below indicates no updations required in bitmap.
+		//-1 in the function call below indicates no updations required in array.
 		//Only need to change isEndOfString and pathPermission.
 		isEndOfString = true;
 		result = createUpdatedCNodeCopy(copiedCNode, tempCNode, -1, isEndOfString, pathPermission);
@@ -1067,7 +1041,7 @@ bool __dtsharedmemory_search(const char *path, bool *pathPermission)
 	FAIL_IF(path == NULL, "Arg(path) is NULL", false);
 	
 	
-	int level;
+	int currentCharacter;
 	uint8_t pathCharacter;
 	
 	
@@ -1075,20 +1049,17 @@ bool __dtsharedmemory_search(const char *path, bool *pathPermission)
 	INode *currentINode;
 	CNode *currentCNode;
 	bool isEndOfString;
+
+	bool entryFor_pathCharacter;
 	
-	int bitmapIndex, bitmapOffset;
-	bool bitmapFor_pathCharacter;
-	
-	for (level = 0 ; *(path + level) != '\0' ; ++level)
+	for (currentCharacter = 0 ; *(path + currentCharacter) != '\0' ; ++currentCharacter)
 	{
 		
-		pathCharacter = *(path + level);
+		pathCharacter = *(path + currentCharacter);
 		
 		FAIL_IF(pathCharacter > (uint8_t)UPPER_LIMIT, "Not accepting characters above UPPER_LIMIT", false);
 		FAIL_IF(pathCharacter < (uint8_t)LOWER_LIMIT, "Not accepting characters below LOWER_LIMIT", false);
 		
-		bitmapIndex  = (pathCharacter - LOWER_LIMIT) / NO_OF_BITS;
-		bitmapOffset = (pathCharacter - LOWER_LIMIT) % NO_OF_BITS;
 		
 		currentINode = GOTO_OFFSET(traverser);
 		
@@ -1096,12 +1067,11 @@ bool __dtsharedmemory_search(const char *path, bool *pathPermission)
 		
 		GUARD_CNODE_ACCESS(
 						   
-						   bitmapFor_pathCharacter =
-						   getBitmapAtIndex(currentCNode->bitmap[bitmapIndex], bitmapOffset);
+						   entryFor_pathCharacter = currentCNode->possibilities[pathCharacter - LOWER_LIMIT];
 						   
 						   )
 		
-		if ( bitmapFor_pathCharacter == false )
+		if ( entryFor_pathCharacter == false)
 		{
 			//Doesn't exist in shared memory
 			return false;
@@ -1135,7 +1105,7 @@ bool __dtsharedmemory_search(const char *path, bool *pathPermission)
 bool reserveSpaceInSharedMemory(size_t bytesToBeReserverd, size_t *reservedOffset)
 {
 	
-	bool result;
+	FAIL_IF(manager == NULL, "Global(manager) is NULL", false);
 	
 	size_t oldValue, newValue;
 	
@@ -1152,19 +1122,6 @@ bool reserveSpaceInSharedMemory(size_t bytesToBeReserverd, size_t *reservedOffse
 #endif
 		
 		FAIL_IF(newValue <= oldValue, "Memory limit reached", false);
-		
-		
-		if (newValue > manager->sharedMemoryFile_mapping_size)
-			//Need to increase mapping size
-		{
-			do
-			{
-				result = expandSharedMemory(newValue);
-				FAIL_IF(!result, "No more available memory", false);
-				
-			}while (manager->sharedMemoryFile_mapping_size < newValue );
-			
-		}
 		
 	} while (
 			 !CAS_size_t(
@@ -1305,23 +1262,7 @@ bool expandSharedMemory(size_t offset)
 
 
 
-void createChildINode(size_t writeFromOffset)
-{
-	
-	INode *baseAddressOfINode = GOTO_OFFSET(writeFromOffset);
-	
-	
-	//	The values of child CNode are to be set to 0. Because truncate(2) already
-	//	fills the file with '\0', this eliminates the need to do this ourselves.
-	
-	
-	baseAddressOfINode->mainNode = writeFromOffset + sizeof(INode);
-	
-}
-
-
-
-bool createUpdatedCNodeCopy(CNode *copy, CNode cNodeToBeCopied, int newIndexForBitmap, bool updated_isEndOfString , bool updated_pathPermission)
+bool createUpdatedCNodeCopy(CNode *copy, CNode cNodeToBeCopied, int index, bool updated_isEndOfString , bool updated_pathPermission)
 {
 	
 	FAIL_IF(manager == NULL, "Global(manager) is NULL", false);
@@ -1331,20 +1272,14 @@ bool createUpdatedCNodeCopy(CNode *copy, CNode cNodeToBeCopied, int newIndexForB
 	copy = memcpy(copy, &cNodeToBeCopied, sizeof(CNode));
 	
 	
-	//Only create a new bitmap entry if `newIndexForBitmap` is non negative.
-	if (newIndexForBitmap >= 0)
+	//Only create a new entry if `index` is non negative.
+	if (index >= 0)
 	{
-		
-		int bitmapIndex, bitmapOffset;
 		bool result;
 		size_t bytesToBeReserverd, writeFromOffset;
 		
 		//Making changes to the copy by adding new child
-		
-		bitmapIndex  = (newIndexForBitmap - LOWER_LIMIT) / NO_OF_BITS;
-		bitmapOffset = (newIndexForBitmap - LOWER_LIMIT) % NO_OF_BITS;
-		
-		
+	
 		bytesToBeReserverd = sizeof(INode) + sizeof(CNode);
 		
 		result = reserveSpaceInSharedMemory(bytesToBeReserverd, &writeFromOffset);
@@ -1352,10 +1287,15 @@ bool createUpdatedCNodeCopy(CNode *copy, CNode cNodeToBeCopied, int newIndexForB
 		FAIL_IF(!result, "Failed to create an updated copy of CNode", false);
 		
 		
-		createChildINode(writeFromOffset);
+		//Creating child INode
 		
-		copy->possibilities[newIndexForBitmap - LOWER_LIMIT] = writeFromOffset;
-		copy->bitmap[bitmapIndex] = setBitmapAtIndex(copy->bitmap[bitmapIndex], bitmapOffset);
+		INode *baseAddressOfINode = GOTO_OFFSET(writeFromOffset);
+		FAIL_IF(!baseAddressOfINode, "baseAddressOfINode found NULL", false);
+		//	The values of child CNode are to be set to 0. Because truncate(2) already
+		//	fills the file with '\0', this eliminates the need to do this ourselves.
+		baseAddressOfINode->mainNode = writeFromOffset + sizeof(INode);
+		
+		copy->possibilities[index] = writeFromOffset;
 	}
 	
 	
@@ -1386,9 +1326,9 @@ size_t __dtsharedmemory_getUsedSharedMemorySize()
 bool __dtsharedmemory_reset_fd()
 {
 	
-	//returns true because fd need not be reset and in dup2(2)
-	//no need to fail the dup2(2) called by the process
-	FAIL_IF(manager == NULL, "Global(manager) is NULL", true);
+	//returns true because because no fd exists
+	if (manager == NULL)
+		return true;
 	
 	struct SharedMemoryManager *old_manager, *new_manager;
 	
