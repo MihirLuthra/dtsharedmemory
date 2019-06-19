@@ -104,7 +104,11 @@ defined(HAVE_OSATOMICCOMPAREANDSWAPPTR) && \
  *	by adding 1. PADDING_BYTES create extra space so 1 can be added to recycled offsets.
  *
  **/
-#define PADDING_BYTES 2
+#if !(DISABLE_DUMPING_AND_RECYCLING)
+#	define PADDING_BYTES 2
+#else
+#	define PADDING_BYTES 0
+#endif
 
 
 
@@ -245,7 +249,7 @@ bool openSharedMemoryFile(struct SharedMemoryManager *new_manager, const char *s
 
 /**
  *
- *	This function inserts a string `path` along with `pathPermission` into the shared memory.
+ *	This function inserts a string `path` along with `flags` into the shared memory.
  *	If insertion is successful, it returns true else false.
  *	The shared memory follows a ctrie data structure. Although it doesn't implement
  *	tomb nodes due to lack of need to remove nodes.
@@ -255,19 +259,18 @@ bool openSharedMemoryFile(struct SharedMemoryManager *new_manager, const char *s
  *	#Arg1(path):
  *		Path to be inserted into shared memory.
  *
- *	#Arg2(pathPermission):
- *		true implies path should be allowed
- *		false implies path should be denied
+ *	#Arg2(flags):
+ *		Tell the characteristics of the path getting inserted.
  *
  **/
-bool __dtsharedmemory_insert(const char *path, bool pathPermission);
+bool __dtsharedmemory_insert(const char *path, uint8_t flags);
 
 
 
 /**
  *
  *	This function searches for a string `path` in the shared memory.
- *	If found it returns true and sets the value of `pathPermission`. Otherwise,
+ *	If found it returns true and sets the value of `flags`. Otherwise,
  *	it returns false.
  *	The shared memory follows a ctrie data structure. Although it doesn't implement
  *	tomb nodes due to lack of need to remove nodes.
@@ -277,18 +280,20 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission);
  *	#Arg1(path):
  *		Path to be searched in shared memory.
  *
- *	#Arg2(pathPermission):
- *		This argument has to be passed by reference because the path permission
- *		would be returned in it.
- *		true implies path should be allowed
- *		false implies path should be denied
+ *	#Arg2(flags):
+ *		Tells the characteristics of the path. This argument needs to be passed
+ *		by address to get characteristcis associated with the path.
  *
  **/
-bool __dtsharedmemory_search(const char *path, bool *pathPermission);
+bool __dtsharedmemory_search(const char *path, uint8_t *flags);
 
 
 
 /**
+ *
+ *  This function is preferred instead of atomic fetch and add because it
+ *  lets us make the check if memory limit has reached or if LARGE_MEMORY_NEEDED 
+ *  is set to 0, it let's us check if limit for that is reached.
  *
  *	Arguments:
  *
@@ -307,8 +312,6 @@ bool __dtsharedmemory_search(const char *path, bool *pathPermission);
  *
  *		This function atomically CASs the value of `writeFromOffset` in status file to
  *		a new value which is given as (`writeFromOffset` + `bytesToBeReserverd`).
- *		If the new value exceeds the limit of currently available mapping,
- *		it calls expandSharedMemory().
  *		Block within range from `reservedOffset` upto `bytesToBeReserved`, after this function
  *		returns, is not a critical section for the caller function and it can write to it
  *		without worrying about thread safety.
@@ -319,6 +322,9 @@ bool reserveSpaceInSharedMemory(size_t bytesToBeReserverd, size_t *reservedOffse
 
 
 /**
+ *
+ *	This function is completely abstracted from main functionality and is
+ *	called _only_ through GOTO_OFFSET() macro.
  *
  *	Arguments:
  *
@@ -370,29 +376,28 @@ static inline size_t getFileSizeForFile(const char *name)
  *		This is the CNode which needs to be copied. It is passed as a (CNode)
  *		and not as (CNode *) because the data this function needs is static and not dynamic.
  *
- *	#Arg3(newIndexForBitmap):
- *		This is the new entry to the bitmap which needs to be made in the copy.
+ *	#Arg3(index):
+ *		This is the new entry to the array which needs to be made in the copy.
  *		This also reserves space for a new child and assigns it to
- *		`copy->possibilities[newIndexForBitmap]`.
- *		If the value of `newIndexForBitmap` is negative, "no" updation is made to
- *		`copy->possibilities[newIndexForBitmap]` or `copy->bitmap[x]`.
+ *		`copy->possibilities[index]`.
+ *		If the value of `index` is negative, "no" updation is made to
+ *		`copy->possibilities[index]`.
  *
- *	#Arg4(updated_isEndOfString) and #Arg5(updated_pathPermission):
+ *	#Arg4(updated_isEndOfString) and #Arg5(updated_flags):
  *		Function updates `copy->isEndOfString` to `updated_isEndOfString`
- *		and `copy->pathPermission` to `updated_pathPermission`.
+ *		and `copy->flags` to `updated_flags`.
  *
  *
  * #### Working of the function ####
  *
  *		This function creates a copy of `cNodeToBeCopied` in `copy`.
- *		If it is given a valid `newIndexForBitmap` as arg, it updates bitmap of `copy`
- *		to contain true at that index. Also, it reservers memory for a new child
- *		and places it into `copy->possibilities[newIndexForBitmap]`.
+ *		If it is given a valid `index` as arg, it reservers memory for a new child
+ *		and places it into `copy->possibilities[index]`.
  *		It also updates the `copy->isEndOfString` to `updated_isEndOfString`
- *		and `copy->pathPermission` to `updated_pathPermission`.
+ *		and `copy->updated_flags` to `updated_flags`.
  *
  **/
-bool createUpdatedCNodeCopy(CNode *copy, CNode cNodeToBeCopied, int newIndexForBitmap, bool updated_isEndOfString, bool updated_pathPermission);
+bool createUpdatedCNodeCopy(CNode *copy, CNode cNodeToBeCopied, int index, bool updated_isEndOfString, uint8_t updated_flags);
 
 
 
@@ -820,7 +825,7 @@ bool openSharedMemoryFile(struct SharedMemoryManager *new_manager, const char *s
 
 
 
-bool __dtsharedmemory_insert(const char *path, bool pathPermission)
+bool __dtsharedmemory_insert(const char *path, uint8_t flags)
 {
 	
 	FAIL_IF(manager == NULL, "Global(manager) is NULL", false);
@@ -860,16 +865,16 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 		
 		GUARD_CNODE_ACCESS(
 						   
-						   entryFor_pathCharacter = currentCNode->possibilities[pathCharacter - LOWER_LIMIT];
+						   entryFor_pathCharacter = (bool)currentCNode->possibilities[pathCharacter - LOWER_LIMIT];
 						   
 						   )
 		
 		
-		if ( entryFor_pathCharacter == false)
+		if ( entryFor_pathCharacter == false )
 		{
 			
 			/**
-			 *	Entering this if block means the node doesn't contain pathCharacter
+			 *	Entering this `if` block means the node doesn't contain pathCharacter
 			 *	This block would create a copy of currentCNode with updated values
 			 *	and try repeated CAS on currentINode->mainNode.
 			 **/
@@ -930,7 +935,10 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 				//cas will fail anyway
 				tempCNode = *currentCNode;
 				
-				result = createUpdatedCNodeCopy(copiedCNode, tempCNode, pathCharacter - LOWER_LIMIT, tempCNode.isEndOfString, tempCNode.pathPermission);
+				
+				FAIL_IF((tempCNode.flags & IS_PREFIX) && pathCharacter == '/', "Path can be searched on the base of prefix, no need to insert complete path", false);
+				
+				result = createUpdatedCNodeCopy(copiedCNode, tempCNode, pathCharacter - LOWER_LIMIT, tempCNode.isEndOfString, tempCNode.flags);
 				
 				FAIL_IF(!result, "Failed to update CNode", false);
 				
@@ -968,16 +976,6 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 	
 	FAIL_IF(!currentINode, "currentINode found NULL", false);
 	
-	GUARD_CNODE_ACCESS(
-					   
-					   isEndOfString = currentCNode->isEndOfString;
-					   
-					   )
-	
-	//String already exists in shared memory
-	if (isEndOfString == true)
-		return true;
-	
 	
 #if !(DISABLE_DUMPING_AND_RECYCLING)
 	
@@ -1011,11 +1009,18 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 		tempCNode = *currentCNode;
 		
 		//-1 in the function call below indicates no updations required in array.
-		//Only need to change isEndOfString and pathPermission.
+		//Only need to change isEndOfString and flags.
 		isEndOfString = true;
-		result = createUpdatedCNodeCopy(copiedCNode, tempCNode, -1, isEndOfString, pathPermission);
+		result = createUpdatedCNodeCopy(copiedCNode, tempCNode, -1, isEndOfString, flags);
 		
 		FAIL_IF(!result, "Failed to update CNode", false);
+		
+		if (flags & IS_PREFIX)
+		{
+			//So that paths that have already been inseted with this
+			//prefix can be searched as prefixes now (see __dtsharedmemory_search())
+			copiedCNode->possibilities['/' - LOWER_LIMIT] = 0;
+		}
 		
 	} while (
 			 !CAS_size_t(
@@ -1034,7 +1039,7 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission)
 
 
 
-bool __dtsharedmemory_search(const char *path, bool *pathPermission)
+bool __dtsharedmemory_search(const char *path, uint8_t *flags)
 {
 	
 	FAIL_IF(manager == NULL, "Global(manager) is NULL", false);
@@ -1051,6 +1056,7 @@ bool __dtsharedmemory_search(const char *path, bool *pathPermission)
 	bool isEndOfString;
 
 	bool entryFor_pathCharacter;
+	uint8_t flagsForCurrentCNode;
 	
 	for (currentCharacter = 0 ; *(path + currentCharacter) != '\0' ; ++currentCharacter)
 	{
@@ -1067,12 +1073,22 @@ bool __dtsharedmemory_search(const char *path, bool *pathPermission)
 		
 		GUARD_CNODE_ACCESS(
 						   
-						   entryFor_pathCharacter = currentCNode->possibilities[pathCharacter - LOWER_LIMIT];
+						   entryFor_pathCharacter	= currentCNode->possibilities[pathCharacter - LOWER_LIMIT];
+						   flagsForCurrentCNode		= currentCNode->flags;
 						   
 						   )
 		
 		if ( entryFor_pathCharacter == false)
 		{
+			
+			if (pathCharacter == '/' && (flagsForCurrentCNode & IS_PREFIX))
+            {
+
+			    *flags = flagsForCurrentCNode;
+				return true;
+            }
+
+			
 			//Doesn't exist in shared memory
 			return false;
 		}
@@ -1092,8 +1108,8 @@ bool __dtsharedmemory_search(const char *path, bool *pathPermission)
 	
 	GUARD_CNODE_ACCESS(
 					   
-					   *pathPermission = currentCNode->pathPermission;
-					   isEndOfString = currentCNode->isEndOfString;
+					   *flags 			= currentCNode->flags;
+					   isEndOfString 	= currentCNode->isEndOfString;
 					   
 					   )
 	
@@ -1153,19 +1169,18 @@ bool expandSharedMemory(size_t offset)
 	struct SharedMemoryManager *old_manager, *new_manager;
 	
 	
+	/**
+	 *	Below we are just choosing the largest known file size
+	 *	Any number of cases can arise that may prevent the code from
+	 *	adding EXPANDING_SIZE to a much old known file size but the next 2 checks
+	 *	make it very very rare making such a condition only theoritical and EXPANDING_SIZE
+	 *	is big enough to even survive that in most cases.
+	 *	To explain it further, sometimes a particular processes may have a
+	 *	very old `sharedMemoryFile_mapping_size` whereas other processes may have went
+	 *	way far, that's why `statusFile_mmap_base->sharedMemoryFileSize` is also checked.
+	 **/
 	
-	//First get current file size
-	//Below we are just choosing the largest known file size
-	//Any number of cases can arise that may prevent the code from
-	//adding EXPANDING_SIZE to a much old known file size but the next 3 checks
-	//make it very very rare making such a condition only theoritical and EXPANDING_SIZE
-	//is big enough to even survive that in most cases.
-	
-	newSize = getFileSizeForFile(manager->sharedMemoryFile_name);
-	
-	FAIL_IF(newSize == (size_t)-1, "getFileSizeForFile() failed", false);
-	
-	newSize = manager->statusFile_mmap_base->sharedMemoryFileSize > newSize ? manager->statusFile_mmap_base->sharedMemoryFileSize : newSize;
+	newSize = manager->statusFile_mmap_base->sharedMemoryFileSize;
 	
 	newSize = manager->sharedMemoryFile_mapping_size > newSize ? manager->sharedMemoryFile_mapping_size : newSize;
 	
@@ -1262,7 +1277,7 @@ bool expandSharedMemory(size_t offset)
 
 
 
-bool createUpdatedCNodeCopy(CNode *copy, CNode cNodeToBeCopied, int index, bool updated_isEndOfString , bool updated_pathPermission)
+bool createUpdatedCNodeCopy(CNode *copy, CNode cNodeToBeCopied, int index, bool updated_isEndOfString, uint8_t updated_flags)
 {
 	
 	FAIL_IF(manager == NULL, "Global(manager) is NULL", false);
@@ -1300,7 +1315,7 @@ bool createUpdatedCNodeCopy(CNode *copy, CNode cNodeToBeCopied, int index, bool 
 	
 	
 	copy->isEndOfString = updated_isEndOfString;
-	copy->pathPermission = updated_pathPermission;
+	copy->flags			= updated_flags;
 	
 	return true;
 	

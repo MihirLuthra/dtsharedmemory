@@ -33,7 +33,7 @@
 
 //{{{{{{{{{{{{{{{{{{{{{{{{{{
 #if (DEBUG_MESSAGES_ALLOWED && 1) && (DEBUG_PRINT_MESSAGES && 1)
-		#define print_error(errorDescription) fprintf(stderr, "\n%s : func(%s) : %s : %s\n\n", __FILE__, __func__, errorDescription, strerror(errno));
+		#define print_error(errorDescription) fprintf(stderr, "%s : func(%s) : %s : %s\n", __FILE__, __func__, errorDescription, strerror(errno));
 #else
 		#define print_error(errorDescription)
 #endif
@@ -46,7 +46,7 @@
 
 	#define FAIL_IF(condition, message, returnVal) \
 	if((condition)){\
-		fprintf(stderr, "\n%s : func(%s) : %s : %s\n\n", __FILE__, __func__, message, strerror(errno));\
+		fprintf(stderr, "%s : func(%s) : %s : %s\n", __FILE__, __func__, message, strerror(errno));\
 		return returnVal;\
 	}
 
@@ -109,7 +109,8 @@
 #define INITIAL_FILE_SIZE 	MB(20) //Keep it greater than sizeof(CNode)+sizeof(INode)
 
 #define EXPANDING_SIZE 		(MB(10) * sysconf(_SC_NPROCESSORS_ONLN))
-
+//EXPANDING_SIZE should vary accordingly with number of processors and processing speed.
+//The bigger factor is number of processors, which has been considered above.
 
 
 struct SharedMemoryStatus;
@@ -206,7 +207,7 @@ struct SharedMemoryManager{
  *		2nd and 3rd node leading to data loss.
  *
  *		""For this reason a node can not recycle offsets dumped by its sibling.""
-  *		See body of __dtsharedmemory_insert() to get an idea of the situation.
+ *		See body of __dtsharedmemory_insert() to get an idea of the situation.
  *
  *
  *	#Member5(bitmapForDumping):
@@ -344,8 +345,7 @@ typedef struct INode{
 #define LOWER_LIMIT 0	//inclusive
 #define UPPER_LIMIT 128	//inclusive
 #define POSSIBLE_CHARACTERS (UPPER_LIMIT - LOWER_LIMIT + 1) //The array size
-//In a path, most frequently occuring characters are from 0 - 128,
-//considering other ascii chars just consumes more space and time while insert and search.
+
 
 #if UPPER_LIMIT <= LOWER_LIMIT
 #	error 	Invalid range of possible characters.\
@@ -362,9 +362,8 @@ typedef struct INode{
  *	#Member2(endOfString):
  *		Is set true when a node needs to represent end of string.
  *
- *	#Member4(pathPermission):
- *		This is only checked when endOfString is true.
- *		If pathPermission is true, access should be allowed otherwise it should be denied.
+ *	#Member3(flags):
+ *		These tells charactersistics associated with the path that has been inserted.
  *
  **/
 typedef struct CNode{
@@ -375,8 +374,8 @@ typedef struct CNode{
 	uint32_t 	possibilities	[POSSIBLE_CHARACTERS];
 #endif
 	
-	bool 	isEndOfString;
-	bool 	pathPermission;
+	bool 		isEndOfString;
+	uint8_t		flags;
 	
 }CNode;
 
@@ -391,8 +390,43 @@ typedef struct CNode{
 
 
 /**
+ *	ALLOW_PATH
+ *		Path should be allowed access.
  *
- *	This function inserts a string `path` along with `pathPermission` into the shared memory.
+ *	DENY_PATH
+ *		Path should be denied access.
+ *
+ *	SANDBOX_VIOLATION
+ *		This is a path to a file that belongs to a foreign port.
+ *		For logging purposes in darwintrace.c
+ *
+ *	SANDBOX_UNKNOWN
+ *		This is a path to a file which is not known to macports.
+ *		For logging purposes in darwintrace.c
+ *
+ *	IS_PREFIX
+ *		Path being inserted is a prefix, i.e., all paths with
+ *		this prefix are treated same way.
+ *		e.g., If "/bin" is inserted with this flag,
+ *		and then a search is made for "/bin/ls", the search will succeed
+ *		and path characteristics of "/bin" will be returned.
+ *		Also these are specifically path prefixes and won't work as a
+ *		general prefix, like search for "/binabc" will fail.
+ **/
+enum
+{
+	ALLOW_PATH			= (uint8_t) 1 << 0,
+	DENY_PATH			= (uint8_t) 1 << 1,
+	SANDBOX_VIOLATION	= (uint8_t) 1 << 2,
+	SANDBOX_UNKNOWN		= (uint8_t) 1 << 3,
+	IS_PREFIX			= (uint8_t) 1 << 4
+};
+
+
+
+/**
+ *
+ *	This function inserts a string `path` along with `flags` into the shared memory.
  *	If insertion is successful, it returns true else false.
  *	The shared memory follows a ctrie data structure. Although it doesn't implement
  *	tomb nodes due to lack of need to remove nodes.
@@ -402,19 +436,20 @@ typedef struct CNode{
  *	#Arg1(path):
  *		Path to be inserted into shared memory.
  *
- *	#Arg2(pathPermission):
- *		true implies path should be allowed
- *		false implies path should be denied
+ *	#Arg2(flags):
+ *		Tell the characteristics of the path getting inserted.
+ *
  *
  **/
-bool __dtsharedmemory_insert(const char *path, bool pathPermission);
+bool __dtsharedmemory_insert(const char *path, uint8_t flags);
+
 
 
 
 /**
  *
  *	This function searches for a string `path` in the shared memory.
- *	If found it returns true and sets the value of `pathPermission`. Otherwise,
+ *	If found it returns true and sets the value of `flags`. Otherwise,
  *	it returns false.
  *	The shared memory follows a ctrie data structure. Although it doesn't implement
  *	tomb nodes due to lack of need to remove nodes.
@@ -424,14 +459,12 @@ bool __dtsharedmemory_insert(const char *path, bool pathPermission);
  *	#Arg1(path):
  *		Path to be searched in shared memory.
  *
- *	#Arg2(pathPermission):
- *		This argument has to be passed by reference because the path permission
- *		would be returned in it.
- *		true implies path should be allowed
- *		false implies path should be denied
+ *	#Arg2(flags):
+ *		Tells the characteristics of the path. This argument needs to be passed
+ *		by address to get characteristcis associated with the path.
  *
  **/
-bool __dtsharedmemory_search(const char *path, bool *pathPermission);
+bool __dtsharedmemory_search(const char *path, uint8_t *flags);
 
 
 
