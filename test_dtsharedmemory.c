@@ -1,6 +1,7 @@
 /**
  *
- *	darwintrace generally doesn't consume more than 100 MB.
+ *	darwintrace generally doesn't consume more than 10 MB. It generally only
+ *	inserts 400-500 paths during a phase whose length generally varies from 3 - 150.
  *	This test inserts randomly generated strings, so most of them generally
  *	don't share same prefix and insertion consumes a good amount of memory.
  *	But in case of paths, lots of them have common prefixes which reduces memory usage.
@@ -9,6 +10,12 @@
  *	and if testing with big numbers, remember to set `LARGE_MEMORY_NEEDED` to 1
  *	in `dtsharedmemory.h`.
  *
+ *	As per the tests till now, the code works stably for both 64 bit and 32 bit machine.
+ *	To test as a 32-bit machine, use -m32 flag in Makefile. Although for big numbers
+ *	memory will run out soon in case of 32-bit machine.
+ *	If testing on 64 bit machine, the code should work stably for large numbers too,
+ *	provided that LARGE_MEMORY_NEEDED (in dtsharedmemory.h) is set to 1.
+ *
  **/
 
 #define NUMBER_OF_PROCESSES 4
@@ -16,8 +23,8 @@
 #define NUMBER_OF_THREADS_PER_PROCESS 4 //excluding main
 #define NUMBER_OF_STRINGS_TO_BE_INSERTED_BY_EACH_THREAD 2000
 
-#define MAX_STRING_SIZE 25
-#define MIN_STRING_SIZE 20
+#define MAX_STRING_SIZE 3
+#define MIN_STRING_SIZE 150
 
 
 
@@ -34,7 +41,11 @@
 
 
 //Store any errors that occured during the test in this file
-FILE *errors_log;
+//Simply redirect stderr to this file referenced by this fd
+int errors_log_fd;
+
+//Store all messages printed by test here
+FILE *test_messages;
 
 
 //If flag is true, a message on stdout gets printed to check errors.log because errors exist
@@ -46,7 +57,7 @@ struct PathData
 {
 	int number_of_strings;	//To be inserted by that particular thread
 	char **path;			//Array of those strings
-	bool *pathPersmission;	//Array of permissions associated with those strings
+	uint8_t *flags;	//Array of permissions associated with those strings
 };
 
 
@@ -65,7 +76,13 @@ int main()
 //________________________________________________________________________________
 	
 	//Open file for logging errors if any
-	errors_log = fopen("errors.log", "w");
+	test_messages = fopen("test_messages.log", "w");
+	errors_log_fd = open("errors.log", O_CREAT | O_WRONLY, 0600);
+
+    
+    if ( errors_log_fd == -1 || dup2(errors_log_fd, STDERR_FILENO) == -1)
+        fprintf(stderr, "Couldn't redirect output to errors.log, errors will be printed on stderr\n");
+
 	char mktemp_dtsm_template[MAXPATHLEN] 			= "macports-dtsm-XXXXXX";
 	char mktemp_dtsm_status_template[MAXPATHLEN] 	= "macports-dtsm-status-XXXXXX";
 	
@@ -163,7 +180,7 @@ int main()
 	
 	if(!didSetManager)
 	{
-		fprintf(errors_log, "\n__dtsharedmemory_set_manager() failed. Test failed\n\n");
+		fprintf(test_messages, "\n__dtsharedmemory_set_manager() failed. Test failed\n\n");
 		flag = true;
 	}
 	
@@ -181,7 +198,7 @@ int main()
 	
 	if(!didSetManager)
 	{
-		fprintf(errors_log, "\n__dtsharedmemory_set_manager() failed when called 2nd time. Test failed\n\n");
+		fprintf(test_messages, "\n__dtsharedmemory_set_manager() failed when called 2nd time. Test failed\n\n");
 		flag = true;
 	}
 	
@@ -281,7 +298,7 @@ int main()
 	
 	if (flag)
 	{
-		printf("\nTest failed, check errors.log\n");
+		printf("\nTest failed, check errors.log and test_messages.log\n");
 	}
 	
 //________________________________________________________________________________
@@ -309,13 +326,13 @@ void prepareThreadArguments(struct PathData *argsToThreads, int number_of_string
 	
 	argsToThreads->number_of_strings = number_of_strings;
 	argsToThreads->path = (char **)malloc( sizeof(char *) * number_of_strings);
-	argsToThreads->pathPersmission = (bool *)malloc( sizeof(bool) * number_of_strings);
+	argsToThreads->flags = (uint8_t *)malloc( sizeof(uint8_t) * number_of_strings);
 	
 	if (argsToThreads->path == NULL) {
 		print_error("null");
 	}
 	
-	if (argsToThreads->pathPersmission == NULL) {
+	if (argsToThreads->flags == NULL) {
 		print_error("null");
 	}
 
@@ -323,7 +340,7 @@ void prepareThreadArguments(struct PathData *argsToThreads, int number_of_string
 	for (i = 0 ; i < number_of_strings ; ++i)
 	{
 		argsToThreads->path[i] = get_random_string(MIN_STRING_SIZE, MAX_STRING_SIZE);
-		argsToThreads->pathPersmission[i] = (bool)rand();
+		argsToThreads->flags[i] = (bool)rand() ? ALLOW_PATH : DENY_PATH;
  	}
 
 }
@@ -370,11 +387,12 @@ void* pathInserter(void* arg)
 	
 	for (i = 0 ; i < size; ++i) {
 		
-		result = __dtsharedmemory_insert(pathToBeInserted->path[i], pathToBeInserted->pathPersmission[i]);
+		result = __dtsharedmemory_insert(pathToBeInserted->path[i], pathToBeInserted->flags[i]);
 		
 		if (!result)
 		{
-			fprintf(errors_log, "[%s] : Insertion failed for - %s\n", __FILE__, pathToBeInserted->path[i]);
+			fprintf(test_messages, "[%s] : \n\nInsertion failed for - %s\n", __FILE__, pathToBeInserted->path[i]);
+            fprintf(test_messages, "\n------------------------------------------------------\n");
 			flag = true;
 		}
 	}
@@ -391,25 +409,26 @@ void* pathSearcher(void* arg)
 	
 	int i;
 
-	bool fetchedPathPersmission;
+	uint8_t fetchedFlags;
 	int size = pathToBeSearched->number_of_strings;
 	
 	for (i = 0 ; i < size ; ++i) {
 		
-		exists = __dtsharedmemory_search(pathToBeSearched->path[i], &(fetchedPathPersmission) );
+		exists = __dtsharedmemory_search(pathToBeSearched->path[i], &(fetchedFlags) );
 		
 		
 		if(!exists)
 		{
 			
-			fprintf(errors_log, "\n %s not found in shared memory. Test failed\n\n", pathToBeSearched->path[i]);
+            fprintf(test_messages, "[%s] : \n\nSearch failed for - %s\n", __FILE__, pathToBeSearched->path[i]);
+            fprintf(test_messages, "\n------------------------------------------------------\n");
 			flag = true;
 		}
 		else
 		{
-			if (fetchedPathPersmission != pathToBeSearched->pathPersmission[i])
+			if (fetchedFlags != pathToBeSearched->flags[i])
 			{
-				fprintf(errors_log, "\n %s permission not correct. Test failed\n\n", pathToBeSearched->path[i]);
+				fprintf(test_messages, "\n %s permission not correct. Test failed\n\n", pathToBeSearched->path[i]);
 				flag = true;
 			}
 		}
