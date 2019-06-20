@@ -854,6 +854,10 @@ bool __dtsharedmemory_insert(const char *path, uint8_t flags)
 	{
 		
 		pathCharacter = *(path + currentCharacter);
+        
+        //13 ascii is custom icon representer on macOS
+        if (pathCharacter == 13)
+            continue;
 		
 		FAIL_IF(pathCharacter > (uint8_t)UPPER_LIMIT, "Not accepting characters above UPPER_LIMIT", false);
 		FAIL_IF(pathCharacter < (uint8_t)LOWER_LIMIT, "Not accepting characters below LOWER_LIMIT", false);
@@ -934,10 +938,7 @@ bool __dtsharedmemory_insert(const char *path, uint8_t flags)
 				//Need not be inside GUARD_CNODE_ACCESS because if the CNode changes,
 				//cas will fail anyway
 				tempCNode = *currentCNode;
-				
-				
-				FAIL_IF((tempCNode.flags & IS_PREFIX) && pathCharacter == '/', "Path can be searched on the base of prefix, no need to insert complete path", false);
-				
+					
 				result = createUpdatedCNodeCopy(copiedCNode, tempCNode, pathCharacter - LOWER_LIMIT, tempCNode.isEndOfString, tempCNode.flags);
 				
 				FAIL_IF(!result, "Failed to update CNode", false);
@@ -972,9 +973,18 @@ bool __dtsharedmemory_insert(const char *path, uint8_t flags)
 		
 	}
 	
-	currentINode = GOTO_OFFSET(traverser);
-	
-	FAIL_IF(!currentINode, "currentINode found NULL", false);
+	/**
+	 *	If the path getting inserted is a prefix, and the last character of
+	 *	the inputted path is '/', just ignore the '/' and treat it like it was
+	 *	never in the Arg(path) because that's how __dtsharedmemory_search() will
+	 *	detect the prefix. The code in the last  makes the ending node of a prefix path
+	 *	contain 0 for '/' so that search can detect the prefix.
+	 **/
+	if ((pathCharacter == '/' && (flags & IS_PREFIX)) 	== 	false)
+	{
+		currentINode = GOTO_OFFSET(traverser);
+		FAIL_IF(!currentINode, "currentINode found NULL", false);
+	}
 	
 	
 #if !(DISABLE_DUMPING_AND_RECYCLING)
@@ -1063,6 +1073,10 @@ bool __dtsharedmemory_search(const char *path, uint8_t *flags)
 		
 		pathCharacter = *(path + currentCharacter);
 		
+        //13 ascii is custom icon representer
+        if (pathCharacter == 13)
+            continue;
+
 		FAIL_IF(pathCharacter > (uint8_t)UPPER_LIMIT, "Not accepting characters above UPPER_LIMIT", false);
 		FAIL_IF(pathCharacter < (uint8_t)LOWER_LIMIT, "Not accepting characters below LOWER_LIMIT", false);
 		

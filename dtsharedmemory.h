@@ -342,8 +342,8 @@ typedef struct INode{
  *	for rare cases. Bigger size of CNode means more time taken for insertion and also
  *	shared memory expands really fast.
  */
-#define LOWER_LIMIT 0	//inclusive
-#define UPPER_LIMIT 128	//inclusive
+#define LOWER_LIMIT 32	//inclusive
+#define UPPER_LIMIT 122	//inclusive
 #define POSSIBLE_CHARACTERS (UPPER_LIMIT - LOWER_LIMIT + 1) //The array size
 
 
