@@ -10,4 +10,4 @@ libdtsharedmemory.so: dtsharedmemory.c dtsharedmemory.h
 	$(CC) $(CFLAGS) -fPIC -shared -o $@ dtsharedmemory.c -lc
 
 clean:
-	rm *.so macports-dtsm-* *.out errors.log
+	rm *.so macports-dtsm-* *.out *.log

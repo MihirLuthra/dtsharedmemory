@@ -15,7 +15,7 @@
 
 //For debugging purposes
 #define DISABLE_DUMPING_AND_RECYCLING 	(0)
-#define DISABLE_MEMORY_EXPANSION 		(0)
+#define DISABLE_MEMORY_EXPANSION 	(0)
 //Instead of disabling DISABLE_MEMORY_EXPANSION, a better idea is to
 //take INITIAL_FILE_SIZE big enough such that expansion isn't needed
 
@@ -27,7 +27,7 @@
 //To debug any of them , just make them 1
 //If DEBUG_MESSAGES_ALLOWED is not 1, none of these flags get debugged even if they are 1.
 #define	DEBUG_PRINT_MESSAGES 	(1)
-#define	DEBUG_FAIL_MESSAGES		(1)
+#define	DEBUG_FAIL_MESSAGES	(1)
 
 
 
@@ -144,15 +144,15 @@ struct SharedMemoryStatus;
 struct SharedMemoryManager{
 
 	//shared memory file
-	void *			sharedMemoryFile_mmap_base;
-	size_t  		sharedMemoryFile_mapping_size;
+	void *		sharedMemoryFile_mmap_base;
+	size_t 		sharedMemoryFile_mapping_size;
 	const char * 	sharedMemoryFile_name;
-	int 			sharedMemoryFile_fd;
+	int 		sharedMemoryFile_fd;
 	
 	//status file
 	struct	SharedMemoryStatus *	statusFile_mmap_base;
-	int								statusFile_fd;
-	const char *					statusFile_name;
+	int				statusFile_fd;
+	const char *			statusFile_name;
 	
 };
 
@@ -252,11 +252,11 @@ struct SharedMemoryStatus
 	//}
 #	else
 	//{
-		size_t 			writeFromOffset;
-		size_t 			sharedMemoryFileSize;
+		size_t 		writeFromOffset;
+		size_t 		sharedMemoryFileSize;
 	
-		size_t 			bitmapForDumping	 [DUMP_YARD_BITMAP_ARRAY_SIZE];
-		size_t 			bitmapForRecycling	 [DUMP_YARD_BITMAP_ARRAY_SIZE];
+		size_t 		bitmapForDumping	 [DUMP_YARD_BITMAP_ARRAY_SIZE];
+		size_t 		bitmapForRecycling	 [DUMP_YARD_BITMAP_ARRAY_SIZE];
 	//}
 #	endif
 
@@ -272,8 +272,8 @@ struct SharedMemoryStatus
 	//}
 #	else
 	//{
-		size_t 			writeFromOffset;
-		size_t 			sharedMemoryFileSize;
+		size_t 		writeFromOffset;
+		size_t 		sharedMemoryFileSize;
 	//}
 #	endif
 
@@ -415,11 +415,11 @@ typedef struct CNode{
  **/
 enum
 {
-	ALLOW_PATH			= (uint8_t) 1 << 0,
-	DENY_PATH			= (uint8_t) 1 << 1,
+	ALLOW_PATH		= (uint8_t) 1 << 0,
+	DENY_PATH		= (uint8_t) 1 << 1,
 	SANDBOX_VIOLATION	= (uint8_t) 1 << 2,
 	SANDBOX_UNKNOWN		= (uint8_t) 1 << 3,
-	IS_PREFIX			= (uint8_t) 1 << 4
+	IS_PREFIX		= (uint8_t) 1 << 4
 };
 
 
