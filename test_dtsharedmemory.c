@@ -1,7 +1,7 @@
 /**
  *
- *	darwintrace generally doesn't consume more than 10 MB. It generally only
- *	inserts 400-500 paths during a phase whose length generally varies from 3 - 150.
+ *	darwintrace doesn't consume more than 10 MB. It generally only
+ *	inserts 400-500 paths during a phase whose length generally varies from 3 - 150(generally less).
  *	This test inserts randomly generated strings, so most of them generally
  *	don't share same prefix and insertion consumes a good amount of memory.
  *	But in case of paths, lots of them have common prefixes which reduces memory usage.
@@ -18,10 +18,11 @@
  *
  **/
 
+
 #define NUMBER_OF_PROCESSES 4
 
 #define NUMBER_OF_THREADS_PER_PROCESS 4 //excluding main
-#define NUMBER_OF_STRINGS_TO_BE_INSERTED_BY_EACH_THREAD 2000
+#define NUMBER_OF_STRINGS_TO_BE_INSERTED_BY_EACH_THREAD 1000
 
 #define MAX_STRING_SIZE 3
 #define MIN_STRING_SIZE 150
@@ -36,6 +37,7 @@
 #include <string.h>
 #include <time.h>
 #include <sys/param.h>
+#include <string.h>
 
 #include "dtsharedmemory.h"
 
@@ -55,9 +57,9 @@ bool flag = false;
 //Argument to individual thread
 struct PathData
 {
-	int number_of_strings;	//To be inserted by that particular thread
-	char **path;			//Array of those strings
-	uint8_t *flags;	//Array of permissions associated with those strings
+	int number_of_strings;  //To be inserted by that particular thread
+	char **path;            //Array of those strings
+	uint8_t *flags;         //Array of permissions associated with those strings
 };
 
 
@@ -66,14 +68,15 @@ void* pathSearcher(void* arg);
 
 char *get_random_string(int minLength, int maxLength);
 void prepareThreadArguments(struct PathData *argsToThreads, int number_of_strings);
+char *get_comma_seperated_number(uint64_t number);
 
 
 int main()
 {
-	//________________________________________________________________________________
-	//SETUP ERROR LOGGING
-	//SETUP FILE NAME FOR SHARED FILE AND ITS STATUS FILE
-	//________________________________________________________________________________
+//________________________________________________________________________________
+//SETUP ERROR LOGGING
+//SETUP FILE NAME FOR SHARED FILE AND ITS STATUS FILE
+//________________________________________________________________________________
 	
 	//Open file for logging errors if any
 	test_messages = fopen("test_messages.log", "w");
@@ -83,21 +86,21 @@ int main()
 	if ( errors_log_fd == -1 || dup2(errors_log_fd, STDERR_FILENO) == -1)
 		fprintf(stderr, "Couldn't redirect output to errors.log, errors will be printed on stderr\n");
 	
-	char mktemp_dtsm_template[MAXPATHLEN] 		= "macports-dtsm-XXXXXX";
-	char mktemp_dtsm_status_template[MAXPATHLEN] 	= "macports-dtsm-status-XXXXXX";
+	char mktemp_dtsm_template[MAXPATHLEN]        = "macports-dtsm-XXXXXX";
+	char mktemp_dtsm_status_template[MAXPATHLEN] = "macports-dtsm-status-XXXXXX";
 	
-	char *dtsm_status_file 	= mktemp(mktemp_dtsm_status_template);
-	char *dtsm_file		= mktemp(mktemp_dtsm_template);
-	
-	
-	//________________________________________________________________________________
+	char *dtsm_status_file = mktemp(mktemp_dtsm_status_template);
+	char *dtsm_file	       = mktemp(mktemp_dtsm_template);
 	
 	
-	//________________________________________________________________________________
-	//(1) 	SETUP TO ALLOW ONLY PARENT PROCESS TO FORK
-	//(2) 	SPLIT NUMBER_OF_PROCESSES EQUALLY 3 PHASES, SO THEY CAN GET FORKED AT
-	//		START OF PROGRAM, BEFORE INSERT & AFTER INSERT(BEFORE SEARCH)
-	//________________________________________________________________________________
+//________________________________________________________________________________
+	
+	
+//________________________________________________________________________________
+//(1) 	SETUP TO ALLOW ONLY PARENT PROCESS TO FORK
+//(2) 	SPLIT NUMBER_OF_PROCESSES EQUALLY 3 PHASES, SO THEY CAN GET FORKED AT
+//		START OF PROGRAM, BEFORE INSERT & AFTER INSERT(BEFORE SEARCH)
+//________________________________________________________________________________
 	int i;
 	int isParentProcess = 1;//only allow parent process to fork
 	
@@ -120,16 +123,18 @@ int main()
 	int processno = 0;
 	int atPhase = 0;
 	
-	//________________________________________________________________________________
-	
-	printf("\nEXPANDING_SIZE on this machine = %zu\n", EXPANDING_SIZE);
-	
+//________________________________________________________________________________
+
+	printf("\nEXPANDING_SIZE on this machine = %s bytes\n", get_comma_seperated_number(EXPANDING_SIZE));
+
 	//subtracting num of processes forked in last phase because they don't do insert
-	printf("\nStrings to be inserted = %d\n", (insertion_count_per_process * (NUMBER_OF_PROCESSES - processCountPerPhase[number_of_fork_phases - 1])));
+	uint64_t total_strings_to_be_inserted = (insertion_count_per_process * (NUMBER_OF_PROCESSES - processCountPerPhase[number_of_fork_phases - 1]));
 	
-	//________________________________________________________________________________
-	//FORK PHASE 1
-	//________________________________________________________________________________
+	printf("\nStrings to be inserted = %s\n", get_comma_seperated_number(total_strings_to_be_inserted));
+	
+//________________________________________________________________________________
+//FORK PHASE 1
+//________________________________________________________________________________
 	processCountInThisPhase = processCountPerPhase[atPhase++];
 	
 	for(i = 0 ; i < processCountInThisPhase ; ++i)
@@ -139,15 +144,15 @@ int main()
 			childProcesses[processno++] = isParentProcess = fork();
 		}
 	}
-	//________________________________________________________________________________
+//________________________________________________________________________________
 	
 	
 	
-	//________________________________________________________________________________
-	//PREPARE ARGUMENTS TO BE SENT TO THREADS.
-	//JUST GENERATE `NUMBER_OF_STRINGS_TO_BE_INSERTED_BY_EACH_THREAD` RANDOM STRINGS
-	//AND SEND THEM TO EACH THREAD
-	//________________________________________________________________________________
+//________________________________________________________________________________
+//PREPARE ARGUMENTS TO BE SENT TO THREADS.
+//JUST GENERATE `NUMBER_OF_STRINGS_TO_BE_INSERTED_BY_EACH_THREAD` RANDOM STRINGS
+//AND SEND THEM TO EACH THREAD
+//________________________________________________________________________________
 	
 	srand(time(0));
 	
@@ -155,19 +160,14 @@ int main()
 	
 	for(i = 0 ; i < NUMBER_OF_THREADS_PER_PROCESS ; ++i)
 	{
-		
-		prepareThreadArguments(
-				       &argsToThreads[i],
-				       NUMBER_OF_STRINGS_TO_BE_INSERTED_BY_EACH_THREAD
-				       );
-		
+		prepareThreadArguments(&argsToThreads[i], NUMBER_OF_STRINGS_TO_BE_INSERTED_BY_EACH_THREAD);
 	}
-	//________________________________________________________________________________
+//________________________________________________________________________________
 	
 	
-	//________________________________________________________________________________
-	//SET SHARED MEMORY MANAGER
-	//________________________________________________________________________________
+//________________________________________________________________________________
+//SET SHARED MEMORY MANAGER
+//________________________________________________________________________________
 	clock_t t;
 	long double time_taken;
 	
@@ -206,12 +206,12 @@ int main()
 	time_taken = ((long double)t)/CLOCKS_PER_SEC;
 	
 	printf("\nTime taken by second call to __dtsharedmemory_set_manager() = %Lf\n", time_taken);
-	//________________________________________________________________________________
+//________________________________________________________________________________
 	
 	
-	//________________________________________________________________________________
-	//FORK PHASE 2
-	//________________________________________________________________________________
+//________________________________________________________________________________
+//FORK PHASE 2
+//________________________________________________________________________________
 	processCountInThisPhase = processCountPerPhase[atPhase++];
 	
 	for(i = 0 ; i < processCountInThisPhase ; ++i)
@@ -221,14 +221,14 @@ int main()
 			childProcesses[processno++] = isParentProcess = fork();
 		}
 	}
-	//________________________________________________________________________________
+//________________________________________________________________________________
 	
 	
 	pthread_t tids[NUMBER_OF_THREADS_PER_PROCESS];
 	
-	//________________________________________________________________________________
-	//INSERTION
-	//________________________________________________________________________________
+//________________________________________________________________________________
+//INSERTION
+//________________________________________________________________________________
 	
 	t = clock();
 	
@@ -251,12 +251,12 @@ int main()
 	time_taken = ((long double)t)/CLOCKS_PER_SEC;
 	
 	printf("\nIn process %d Time taken to insert %d strings by %d threads = %Lf\n", getpid(), insertion_count_per_process, NUMBER_OF_THREADS_PER_PROCESS, time_taken);
-	//________________________________________________________________________________
+//________________________________________________________________________________
 	
 	
-	//________________________________________________________________________________
-	//FORK PHASE 3
-	//________________________________________________________________________________
+//________________________________________________________________________________
+//FORK PHASE 3
+//________________________________________________________________________________
 	processCountInThisPhase = processCountPerPhase[atPhase++];
 	
 	for(i = 0 ; i < processCountInThisPhase ; ++i)
@@ -266,12 +266,12 @@ int main()
 			childProcesses[processno++] = isParentProcess = fork();
 		}
 	}
-	//________________________________________________________________________________
+//________________________________________________________________________________
 	
 	
-	//________________________________________________________________________________
-	//SEARCH
-	//________________________________________________________________________________
+//________________________________________________________________________________
+//SEARCH
+//________________________________________________________________________________
 	
 	t = clock();
 	// Launch threads for search
@@ -294,16 +294,16 @@ int main()
 	time_taken = ((long double)t)/CLOCKS_PER_SEC;
 	
 	printf("\nTime taken to search %d strings by %d threads = %Lf\n", insertion_count_per_process, NUMBER_OF_THREADS_PER_PROCESS, time_taken);
-	//________________________________________________________________________________
+//________________________________________________________________________________
 	
 	if (flag)
 	{
 		printf("\nTest failed, check errors.log and test_messages.log\n");
 	}
 	
-	//________________________________________________________________________________
-	//WAIT FOR CHILD PROCESSES
-	//________________________________________________________________________________
+//________________________________________________________________________________
+//WAIT FOR CHILD PROCESSES
+//________________________________________________________________________________
 	if(isParentProcess)
 	{
 		for (i = 0 ; i < NUMBER_OF_PROCESSES - 1 ; ++i)
@@ -314,9 +314,9 @@ int main()
 		size_t realFileSizeUsed = __dtsharedmemory_getUsedSharedMemorySize();
 		
 		
-		printf("\nShared memory size used after all processes ended = %zu\n\n", realFileSizeUsed);
+		printf("\nShared memory size used after all processes ended = %s bytes\n\n", get_comma_seperated_number(realFileSizeUsed));
 	}
-	//________________________________________________________________________________
+//________________________________________________________________________________
 	
 }
 
@@ -326,14 +326,18 @@ void prepareThreadArguments(struct PathData *argsToThreads, int number_of_string
 	
 	argsToThreads->number_of_strings = number_of_strings;
 	argsToThreads->path = (char **)malloc( sizeof(char *) * number_of_strings);
-	argsToThreads->flags = (uint8_t *)malloc( sizeof(uint8_t) * number_of_strings);
 	
-	if (argsToThreads->path == NULL) {
-		print_error("null");
+	if (argsToThreads->path == NULL)
+	{
+		print_error("argsToThreads->path: malloc(2) failed");
 	}
 	
-	if (argsToThreads->flags == NULL) {
-		print_error("null");
+	argsToThreads->flags = (uint8_t *)malloc( sizeof(uint8_t) * number_of_strings);
+	
+	
+	if (argsToThreads->flags == NULL)
+	{
+		print_error("argsToThreads->flags: malloc(2) failed");
 	}
 	
 	
@@ -352,8 +356,9 @@ char *get_random_string(int minLength, int maxLength)
 	
 	char *random_string = (char *)malloc(sizeof(char) * (strSize + 2) );
 	
-	if (random_string == NULL) {
-		print_error("null");
+	if (random_string == NULL)
+	{
+		print_error("random_string: malloc(2) failed");
 	}
 	
 	uint8_t random_char;
@@ -438,4 +443,32 @@ void* pathSearcher(void* arg)
 	pthread_exit(0);
 }
 
+
+char *get_comma_seperated_number(uint64_t number)
+{
+	int digit, count = 0, index = 0;
+	char rev_comma_seperated_number[100];
+	
+	int i, j;
+	
+	while(number != 0)
+	{
+		digit = number % 10;
+		number /= 10;
+		if (count % 3 == 0)
+			rev_comma_seperated_number[index++] = ',';
+		rev_comma_seperated_number[index++] = digit + 48;
+		++count;
+	}
+	rev_comma_seperated_number[index] = '\0';
+
+	char *comma_seperated_number = (char *)malloc(sizeof(char) * (index) );
+	
+	for(i = index - 1 , j = 0 ; i > 0 ; --i, ++j)
+		comma_seperated_number[j] = rev_comma_seperated_number[i];
+	
+	comma_seperated_number[j] = '\0';
+	
+	return comma_seperated_number;
+}
 
