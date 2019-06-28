@@ -30,6 +30,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifndef __DTSHAREDMEMORY_H__
+#define __DTSHAREDMEMORY_H__
 
 #include <stdbool.h>
 #include <errno.h>
@@ -37,20 +39,16 @@
 #include <stdint.h>
 
 
-#ifdef __DARWINTRACE_H__
-#	include <darwintrace.h>
-#else
-	FILE *__darwintrace_stderr = NULL;
-#endif
-
-
 #ifdef HAVE_CONFIG_H
-#include <config.h>
+#    include <config.h>
 #endif
 
 
-#ifndef __SHARED_MEMORY_H__
-#define __SHARED_MEMORY_H__
+#ifndef STANDALONE_DTSM
+#    include <darwintrace.h>
+#else
+FILE *__darwintrace_stderr = NULL;
+#endif
 
 
 //For debugging purposes
@@ -197,15 +195,6 @@ struct SharedMemoryManager{
 
 
 
-#define DUMP_YARD_SIZE 64
-
-/*
- *	The bitmap may need to store more than NO_OF_BITS bits. A size_t can only store
- *	mapping for max system bits. So to make it possible to store more than NO_OF_BITS bit,
- *	an array of such size_t is created whose size is given by DUMP_YARD_BITMAP_ARRAY_SIZE.
- */
-#define DUMP_YARD_BITMAP_ARRAY_SIZE \
-((DUMP_YARD_SIZE % NO_OF_BITS == 0) ? DUMP_YARD_SIZE/NO_OF_BITS : ((DUMP_YARD_SIZE/NO_OF_BITS) + 1))
 
 /**
  *	#Member1(writeFromOffset):
@@ -232,21 +221,26 @@ struct SharedMemoryManager{
  *
  * #### Common parent race condition problem ####
  *
- *		This is a sick race condition among sibling nodes.
- *		Suppose 3 threads, each dealing with different child of same parent.
- *		(1st thread)1st child prepared its old offset, and is now preparing new offset to
- *		get ready for CAS. Meanwhile (2nd thread)2nd child CASd the old offset to
- *		point to a new offset and it dumped the old offset for recycling after the
- *		new offset contained updated bitmap. Meanwhile the (3rd thread)3rd child
- *		recycled the offset dumped by the 2nd node and CASd it to be child of current parent.
- *		Bitmap has got updations from 2nd and 3rd child node.
- *		Now when 1st node will attemp to CAS, it will find the oldValue
- *		and the actual value to be equal, because 3rd node reused old offset,
- *		but the new value 1st node replaces don't contain bitmap entries set by
- *		2nd and 3rd node leading to data loss.
+ *	This is a sick race condition among sibling nodes.
+ *	See `__dtsharedmemory_insert()` to get an idea of the situation.
+ *	Assume 3 threads, each dealing with a different `INode` with same parent `CNode`.
+ *	(1st thread)1st one prepared its old offset to child `CNode`,
+ *	and is now preparing new offset to get ready for `CAS`.
+ *	Meanwhile (2nd thread)2nd `INode` `CAS`'d the old offset to point to a new
+ *	child `CNode` and it dumped the offset to old child `CNode`
+ *	so that it can be recycled and the offset to new child `CNode`
+ *	contains updated array entries.
+ *	Meanwhile the (3rd thread)3rd node recycled the offset dumped by the 2nd `INode`
+ *	and `CAS`'d it to be child of current parent.
+ *	Array entries has got updations from 2nd and 3rd child `INode`.
+ *	Now when 1st node will attempt to `CAS`, it will find the
+ *	oldValue and the actual value to be equal, because 3rd node reused old offset,
+ *	but the new value 1st node replaces don't
+ *	contain array entries set by 2nd and 3rd node leading to data loss.
+ *	For this reason an `INode` can _not_ use a recycled offsets dumped by its
+ *	sibling to make upgradations.
  *
- *		""For this reason a node can not recycle offsets dumped by its sibling.""
- *		See body of __dtsharedmemory_insert() to get an idea of the situation.
+ *	""For this reason a node can not recycle offsets dumped by its sibling.""
  *
  *
  *	#Member5(bitmapForDumping):
@@ -275,6 +269,17 @@ struct SharedMemoryManager{
  **/
 struct SharedMemoryStatus
 {
+	
+#define DUMP_YARD_SIZE 64
+	
+	/*
+	 *	The bitmap may need to store more than NO_OF_BITS bits. A size_t can only store
+	 *	mapping for max system bits. So to make it possible to store more than NO_OF_BITS bit,
+	 *	an array of such size_t is created whose size is given by DUMP_YARD_BITMAP_ARRAY_SIZE.
+	 */
+#define DUMP_YARD_BITMAP_ARRAY_SIZE \
+((DUMP_YARD_SIZE % NO_OF_BITS == 0) ? DUMP_YARD_SIZE/NO_OF_BITS : ((DUMP_YARD_SIZE/NO_OF_BITS) + 1))
+	
 	
 #if !(DISABLE_DUMPING_AND_RECYCLING)
 
@@ -445,8 +450,10 @@ typedef struct CNode{
  *	IS_PREFIX
  *		Path being inserted is a prefix, i.e., all paths with
  *		this prefix are treated same way.
+ *		Prefix in simple words is a common parent directory.
  *		e.g., If "/bin" is inserted with this flag,
- *		and then a search is made for "/bin/ls", the search will succeed
+ *		and then a search is made for "/bin/ls" or "/bin/abc/ls",
+ *		the search will succeed
  *		and path characteristics of "/bin" will be returned.
  *		Also these are specifically path prefixes and won't work as a
  *		general prefix, like search for "/binabc" will fail.
