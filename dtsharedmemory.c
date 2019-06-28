@@ -472,21 +472,26 @@ bool createUpdatedCNodeCopy(CNode *copy, CNode cNodeToBeCopied, int index, bool 
  *
  * #### Common parent race condition problem ####
  *
- *		This is a sick race condition among sibling nodes.
- *		See __dtsharedmemory_insert() to get an idea of the situation.
- *		Suppose 3 threads, each dealing with different child of same parent.
- *		(1st thread)1st one prepared its old offset, and is now preparing new offset to
- *		get ready for CAS. Meanwhile (2nd thread)2nd node CASd the old offset to
- *		point to a new offset and it dumped the old offset for recycling and the
- *		new offset contains updated bitmap. Meanwhile the (3rd thread)3rd node
- *		recycled the offset dumped by the 2nd node and CASd it to be child of current parent.
- *		Bitmap has got updations from 2nd and 3rd child node.
- *		Now when 1st node will attempt to CAS, it will find the oldValue
- *		and the actual value to be equal, because 3rd node reused old offset,
- *		but the new value 1st node replaces don't contain bitmap entries set by
- *		2nd and 3rd node leading to data loss.
+ *	This is a sick race condition among sibling nodes.
+ *	See `__dtsharedmemory_insert()` to get an idea of the situation.
+ *	Assume 3 threads, each dealing with a different `INode` with same parent `CNode`.
+ *	(1st thread)1st one prepared its old offset to child `CNode`,
+ *	and is now preparing new offset to get ready for `CAS`.
+ *	Meanwhile (2nd thread)2nd `INode` `CAS`'d the old offset to point to a new
+ *	child `CNode` and it dumped the offset to old child `CNode`
+ *	so that it can be recycled and the offset to new child `CNode`
+ *	contains updated array entries.
+ *	Meanwhile the (3rd thread)3rd node recycled the offset dumped by the 2nd `INode`
+ *	and `CAS`'d it to be child of current parent.
+ *	Array entries has got updations from 2nd and 3rd child `INode`.
+ *	Now when 1st node will attempt to `CAS`, it will find the
+ *	oldValue and the actual value to be equal, because 3rd node reused old offset,
+ *	but the new value 1st node replaces don't
+ *	contain array entries set by 2nd and 3rd node leading to data loss.
+ *	For this reason an `INode` can _not_ use a recycled offsets dumped by its
+ *	sibling to make upgradations.
  *
- *		""For this reason a node can not recycle offsets dumped by its sibling.""
+ *	""For this reason a node can not recycle offsets dumped by its sibling.""
  *
  *
  * #### Working of the function ####
@@ -856,7 +861,7 @@ bool __dtsharedmemory_insert(const char *path, uint8_t flags)
 		
 		pathCharacter = *(path + currentCharacter);
 		
-#if (LOWER_LIMIT > 13)
+#ifndef STANDALONE_DTSM
 		//13 ascii is custom icon representer on macOS
 		if (pathCharacter == 13)
 			continue;
@@ -1060,8 +1065,8 @@ bool __dtsharedmemory_search(const char *path, uint8_t *flags)
 	{
 		
 		pathCharacter = *(path + currentCharacter);
-		
-#if (LOWER_LIMIT > 13)
+	
+#if STANDALONE_DTSM
 		//13 ascii is custom icon representer
 		if (pathCharacter == 13)
 			continue;
