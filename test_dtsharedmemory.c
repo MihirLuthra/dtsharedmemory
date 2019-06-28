@@ -2,6 +2,9 @@
  *
  *	darwintrace doesn't consume more than 10 MB. It generally only
  *	inserts 400-500 paths during a phase whose length generally varies from 3 - 150(generally less).
+ *	More the memory consumed, more is the time taken.
+ *	Long paths take more time to get searched comparitively (obviously).
+ *
  *	This test inserts randomly generated strings, so most of them generally
  *	don't share same prefix and insertion consumes a good amount of memory.
  *	But in case of paths, lots of them have common prefixes which reduces memory usage.
@@ -18,14 +21,26 @@
  *
  **/
 
+/**
+ *
+ * ## WORKING ##
+ *
+ *	The test forks NUMBER_OF_PROCESSES at the beginning of the program.
+ *	Each process prepares many paths as an argument to each thread it would
+ *	create. The number of paths getting inserted by each thread is specified by
+ *	NUMBER_OF_STRINGS_TO_BE_INSERTED_BY_EACH_THREAD and the number of threads in
+ *	each process is specified by NUMBER_OF_THREADS_PER_PROCESS.
+ *
+ **/
+
 
 #define NUMBER_OF_PROCESSES 4
 
-#define NUMBER_OF_THREADS_PER_PROCESS 4 //excluding main
-#define NUMBER_OF_STRINGS_TO_BE_INSERTED_BY_EACH_THREAD 1000
+#define NUMBER_OF_THREADS_PER_PROCESS 4//excluding main
+#define NUMBER_OF_STRINGS_TO_BE_INSERTED_BY_EACH_THREAD 10000
 
 #define MAX_STRING_SIZE 3
-#define MIN_STRING_SIZE 150
+#define MIN_STRING_SIZE 100
 
 
 
@@ -68,11 +83,18 @@ void* pathSearcher(void* arg);
 
 char *get_random_string(int minLength, int maxLength);
 void prepareThreadArguments(struct PathData *argsToThreads, int number_of_strings);
+
 char *get_comma_seperated_number(uint64_t number);
+char *get_size_to_the_nearest_unit(char *comma_separated_number);//get string in MB, GB, KB
 
 
 int main()
 {
+	
+	printf("\n");
+	
+	printf("PREPARING FOR TEST...\n\n");
+	
 //________________________________________________________________________________
 //SETUP ERROR LOGGING
 //SETUP FILE NAME FOR SHARED FILE AND ITS STATUS FILE
@@ -125,12 +147,19 @@ int main()
 	
 //________________________________________________________________________________
 
-	printf("\nEXPANDING_SIZE on this machine = %s bytes\n", get_comma_seperated_number(EXPANDING_SIZE));
+	char *str_EXPANDING_SIZE = get_comma_seperated_number(EXPANDING_SIZE);
+	
+	printf("EXPANDING_SIZE on this machine = %s bytes", str_EXPANDING_SIZE);
+	
+	if( (str_EXPANDING_SIZE = get_size_to_the_nearest_unit(str_EXPANDING_SIZE)) != NULL)
+	{
+		printf(" (%s)\n", str_EXPANDING_SIZE);
+	}
 
 	//subtracting num of processes forked in last phase because they don't do insert
 	uint64_t total_strings_to_be_inserted = (insertion_count_per_process * (NUMBER_OF_PROCESSES - processCountPerPhase[number_of_fork_phases - 1]));
 	
-	printf("\nStrings to be inserted = %s\n", get_comma_seperated_number(total_strings_to_be_inserted));
+	printf("Strings to be inserted = %s\n", get_comma_seperated_number(total_strings_to_be_inserted));
 	
 //________________________________________________________________________________
 //FORK PHASE 1
@@ -168,6 +197,10 @@ int main()
 //________________________________________________________________________________
 //SET SHARED MEMORY MANAGER
 //________________________________________________________________________________
+	
+	if (isParentProcess)
+		printf("\nSETTING UP SHARED MEMORY...\n\n");
+	
 	clock_t t;
 	long double time_taken;
 	
@@ -180,14 +213,14 @@ int main()
 	
 	if(!didSetManager)
 	{
-		fprintf(test_messages, "\n__dtsharedmemory_set_manager() failed. Test failed\n\n");
+		fprintf(test_messages, "__dtsharedmemory_set_manager() failed. Test failed\n");
 		flag = true;
 	}
 	
 	t = clock() - t;
 	time_taken = ((long double)t)/CLOCKS_PER_SEC;
 	
-	printf("\nTime taken by __dtsharedmemory_set_manager() = %Lf\n", time_taken);
+	printf("Time taken by __dtsharedmemory_set_manager() in process %d = %Lf\n", getpid(), time_taken);
 	
 	
 	//Monitor time taken to __dtsharedmemory_set_manager() one second call
@@ -198,14 +231,14 @@ int main()
 	
 	if(!didSetManager)
 	{
-		fprintf(test_messages, "\n__dtsharedmemory_set_manager() failed when called 2nd time. Test failed\n\n");
+		fprintf(test_messages, "__dtsharedmemory_set_manager() failed when called 2nd time. Test failed\n\n");
 		flag = true;
 	}
 	
 	t = clock() - t;
 	time_taken = ((long double)t)/CLOCKS_PER_SEC;
 	
-	printf("\nTime taken by second call to __dtsharedmemory_set_manager() = %Lf\n", time_taken);
+	printf("Time taken by second call to __dtsharedmemory_set_manager() in process %d = %Lf\n", getpid(), time_taken);
 //________________________________________________________________________________
 	
 	
@@ -230,6 +263,9 @@ int main()
 //INSERTION
 //________________________________________________________________________________
 	
+	if (isParentProcess)
+		printf("\nINSERTING PATHS...\n\n");
+	
 	t = clock();
 	
 	// Launch threads for insertion
@@ -250,7 +286,7 @@ int main()
 	t = clock() - t;
 	time_taken = ((long double)t)/CLOCKS_PER_SEC;
 	
-	printf("\nIn process %d Time taken to insert %d strings by %d threads = %Lf\n", getpid(), insertion_count_per_process, NUMBER_OF_THREADS_PER_PROCESS, time_taken);
+	printf("In process %d Time taken to insert %d strings by %d threads = %Lf\n", getpid(), insertion_count_per_process, NUMBER_OF_THREADS_PER_PROCESS, time_taken);
 //________________________________________________________________________________
 	
 	
@@ -273,6 +309,9 @@ int main()
 //SEARCH
 //________________________________________________________________________________
 	
+	if (isParentProcess)
+		printf("\nSEARCHING PATHS...\n\n");
+	
 	t = clock();
 	// Launch threads for search
 	for (i = 0; i < NUMBER_OF_THREADS_PER_PROCESS; ++i)
@@ -293,13 +332,10 @@ int main()
 	t = clock() - t;
 	time_taken = ((long double)t)/CLOCKS_PER_SEC;
 	
-	printf("\nTime taken to search %d strings by %d threads = %Lf\n", insertion_count_per_process, NUMBER_OF_THREADS_PER_PROCESS, time_taken);
+	printf("In process %d Time taken to search %d strings by %d threads = %Lf\n", getpid(), insertion_count_per_process, NUMBER_OF_THREADS_PER_PROCESS, time_taken);
 //________________________________________________________________________________
 	
-	if (flag)
-	{
-		printf("\nTest failed, check errors.log and test_messages.log\n");
-	}
+
 	
 //________________________________________________________________________________
 //WAIT FOR CHILD PROCESSES
@@ -313,8 +349,23 @@ int main()
 		
 		size_t realFileSizeUsed = __dtsharedmemory_getUsedSharedMemorySize();
 		
+		char *str_realFileSizeUsed = get_comma_seperated_number(realFileSizeUsed);
 		
-		printf("\nShared memory size used after all processes ended = %s bytes\n\n", get_comma_seperated_number(realFileSizeUsed));
+		printf("\nShared memory size used after all processes ended = %s bytes", str_realFileSizeUsed);
+
+		if( (str_realFileSizeUsed = get_size_to_the_nearest_unit(str_realFileSizeUsed)) != NULL)
+		{
+			printf(" (%s)\n", str_realFileSizeUsed);
+		}
+		
+		if (flag)
+		{
+			printf("\nTEST FAILED, check errors.log and test_messages.log\n\n");
+		}
+		else
+		{
+			printf("\nTEST PASSED\n\n");
+		}
 	}
 //________________________________________________________________________________
 	
@@ -472,3 +523,48 @@ char *get_comma_seperated_number(uint64_t number)
 	return comma_seperated_number;
 }
 
+
+char *get_size_to_the_nearest_unit(char *comma_separated_number)
+{
+	int i, j;
+	int comma_count = 0;
+	
+	char *approxed_size = (char *)malloc(sizeof(char) * (7) );
+	
+	for(i = 0 , j = 0 ; comma_separated_number[i] != '\0' ; ++i)
+	{
+		if (comma_separated_number[i] == ',')
+			++comma_count;
+		
+		if (!comma_count)
+			approxed_size[j++] = comma_separated_number[i];
+	}
+	
+	approxed_size[j++] = ' ';
+	
+	switch (comma_count) {
+		case 1:
+			approxed_size[j++] = 'K';
+			
+			break;
+			
+		case 2:
+			approxed_size[j++] = 'M';
+			
+			break;
+			
+		case 3:
+			approxed_size[j++] = 'G';
+
+			break;
+		default:
+			free(approxed_size);
+			return NULL;
+	}
+	
+	approxed_size[j++] = 'B';
+	approxed_size[j++] = '\0';
+	
+	return approxed_size;
+	
+}
