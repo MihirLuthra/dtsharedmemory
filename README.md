@@ -27,10 +27,9 @@ The code takes help from [this](https://arxiv.org/abs/1709.06056?context=cs) res
 # INSERTION
  
     const char *path = "/usr/local";
-    bool path_permission = false;
     bool did_insert;
     
-    did_insert = insert(path, path_permission);
+    did_insert = insert(path, DENY_PATH);
     
     if(!did_insert)
     {
@@ -44,10 +43,10 @@ The code takes help from [this](https://arxiv.org/abs/1709.06056?context=cs) res
 # SEARCH:
  
     const char *path = "/usr/local";
-    bool path_permission;
+    bool dtsm_flags;
     bool found_in_dtsm;
     
-    found_in_dtsm = search(path, &path_permission);
+    found_in_dtsm = search(path, &dtsm_flags);
     
     if(!found_in_dtsm)
     {
@@ -57,7 +56,7 @@ The code takes help from [this](https://arxiv.org/abs/1709.06056?context=cs) res
     {
         //Path exists in shared memory
         
-        if(path_permission)
+        if(dtsm_flags & ALLOW_PATH)
         {
             //path access allowed
         }
@@ -158,16 +157,15 @@ Iff `manager` is found `NULL`, CAS is performed, otherwise it is assumed that so
 setting up of global manager.
 
 Now as we are done with `__dtsharedmemory_set_manager()`, we can call 
-`__dtsharedmemory_insert(const char *path, bool pathPermission)` or
-`__dtsharedmemory_search(const char *path, bool *pathPermission)`.
+`__dtsharedmemory_insert(const char *path, bool dtsm_flags)` or
+`__dtsharedmemory_search(const char *path, bool *dtsm_flags)`.
 
 Lets say first we insert a string, `"/usr/local"`
 
 	const char *path = "/usr/local";
-	bool path_permission = false;
 	bool did_insert;
 	
-	did_insert = __dtsharedmemory_insert(path, path_permission);
+	did_insert = __dtsharedmemory_insert(path, DENY_PATH);
 	
 	if(!did_insert)
 	{
@@ -179,8 +177,8 @@ Lets say first we insert a string, `"/usr/local"`
 	}
 	
 The code in `__dtsharedmemory_insert()` would start from root node which is already setup in `openSharedMemoryFile()`.
-We iterate through each character of input string and for each character we check the bitmap of that node. If the bitmap
-contains entry for that node, we proceed to next node. Otherwise we create entry for that node and proceed to next node.
+We iterate through each character of input string and for each character we check the array entries of that node. If the
+array contains entry for that node, we proceed to next node. Otherwise we create entry for that node and proceed to next node.
 
 The memory which we have to access is in range `manager->sharedMemoryFile_mmap_base` to 
 `manager->sharedMemoryFile_mmap_base + manager->sharedMemoryFile_mapping_size`. If need for more space arises,
@@ -196,16 +194,16 @@ For now just consider it as a code that evaluates `currentCNode = GOTO_OFFSET(cu
 then makes the `CNode` member access.
 
 We begin from offset 0, which is the root `INode` From root `INode` we proceed to its child `CNode` by `root->mainNode`.
-We then fetch the first character from the input string and check the bitmap entry of current `CNode` to see if
+We then fetch the first character from the input string and check the array of current `CNode` to see if
 the entry for the character exists or not. If it exists, we simply move to the child `INode` of current `CNode` as
 `currentCNode->possibilities[character]`. If it doesn't exist, we create a new copy of current `CNode` so that we can make 
-entry of this character in the bitmap. In order to do so, we reserve space in shared memory for writing a new `CNode`.
+entry of this character in the array. In order to do so, we reserve space in shared memory for writing a new `CNode`.
 To get space in the shared memory, we call a function 
 `reserveSpaceInSharedMemory(size_t bytesToBeReserverd, size_t *reservedOffset)` which shifts the `writeFromOffset` in 
 status file ahead by `bytesToBeReserverd` and the old value of `writeFromOffset` is `reservedOffset` now. This portion of
 shared memory belongs to the caller thread now and is not a critical section. We then call 
-`createUpdatedCNodeCopy(CNode *copy, CNode cNodeToBeCopied, int newIndexForBitmap, bool updated_isEndOfString , bool updated_pathPermission)`
-which creates the `CNode` copy with updated bitmap and creates a child (a new `INode` + `CNode`) for new bitmap entry.
+`createUpdatedCNodeCopy(CNode *copy, CNode cNodeToBeCopied, int index, bool updated_isEndOfString, uint8_t updated_flags)`
+which creates the `CNode` copy with updated array entries and creates a child (a new `INode` + `CNode`) for new array entry.
 Now on the parent `INode`, atomic CAS is performed to change it to the newly created copy. The old `CNode` is now 
 wasted and this offset is dumped for reuse by calling 
 `dumpWastedMemory()`. We will discuss about dumping and recycling in the end.
@@ -218,8 +216,7 @@ Now to go deeper into this, firstly lets see the nodes we are using for the data
 Just like in ctrie, here also we have an `INode` and a `CNode`. We don't need to implement `SNode` as we don't need deletion 
 of nodes in our case. As mentioned before, here as we are dealing with a memory mapping of a file, so we use 
 offsets instead on 
-pointer to next nodes. Data type we use for offsets is `size_t`. Except for bitmap, wherever `size_t` is used, it refers to 
-offsets.
+pointer to next nodes. Data type we use for offsets is `size_t`.
 
 
 	typedef struct INode{
@@ -230,7 +227,6 @@ offsets.
 
 	typedef struct CNode{
 	
-		size_t 	bitmap		[BITMAP_ARRAY_SIZE];
 		size_t	possibilities	[POSSIBLE_CHARACTERS];
 		bool 	isEndOfString;
 		bool 	pathPermission;
@@ -238,18 +234,14 @@ offsets.
 	}CNode;
 
 where `POSSIBLE_CHARACTERS` can be set to any number between 0-255.
-and `BITMAP_ARRAY_SIZE` is array size for `bitmap`.
 
-`bitmap` is of type `size_t`, so on 64 bit machine, it can store data about 64 entries. 
 
 Like in a basic linked list when you want to tell nothing exists ahead, you set next node to `NULL`. In a trie, 
-the index which doesn't have a subtree, it is set to `NULL`. Similarly in here we use `bitmap` for knowing if further
-traversing is possible in the trie. e.g., If index 65 which is ascii for 'A' exists in a particular `CNode`, we will set
-2nd bit of the `bitmap[1]`. `bitmap[0]` stores data for ascii 0-63. Further `bitmap[1]` stores data for 64-127 and so on.
-Although we can set `possibilities[x]` at that particular index as 0 (which _is_ unique because root `INode` exists at 0)
-but that would increase the iterations as we need to set every index to 0 for each node. This maybe argued by the fact that
-`truncate(2)` already fills the file that it expands with '\0'. This removes the need to set anything to 0. But using `bitmap`
-preserves format of ctrie data structure.
+the index which doesn't have a subtree, it is set to `NULL`. 
+Here we set `possibilities[x]` at that particular index as 0 (which _is_ unique because root `INode` exists at 0).
+That should increase the iterations as we need to set every index to 0 for each node. But that's not the case. 
+When we expanded size of file by `truncate(2)`, it already fills the file that it expands with '\0'. This removes the need to
+set anything to 0.
 
 Ctrie being an extension of trie, has almost the same attributes. If our implementation was a normal trie, it would just
 have `CNode`'s. In a ctrie, `INode` are also needed.
@@ -260,9 +252,9 @@ and the parent node is made to point the updated copy.
 
 Suppose there was no `INode`.
 
-Let the parent `CNode` be `C1` and one of the child of `C1` be `C2`. To add a new value to bitmap of a `C1`, 
+Let the parent `CNode` be `C1` and one of the child of `C1` be `C2`. To add a new value to array of a `C1`, 
 a copy of it is created. While the changes are being made to that copy, it is possible that some other thread had 
-created a copy of `C2` to update its bitmap. Parent `C1` is made to reference updated `C2`. But the copy of C1 that
+created a copy of `C2` to update its array. Parent `C1` is made to reference updated `C2`. But the copy of C1 that
 was created before replaces the old one, the changes that were made in between won't get reflected to the update `C1`.
 This is why `INode` is necessary.
 
@@ -273,10 +265,10 @@ Go through the research paper about [ctrie](https://arxiv.org/abs/1709.06056?con
 To search a string we inserted, we simply need to call `__dtsharedmemory_search(const char *path, bool *pathPermission)`.
 
     const char *path = "/usr/local";
-    bool path_permission;
+    bool dtsm_flags;
     bool found_in_dtsm;
     
-    found_in_dtsm = search(path, &path_permission);
+    found_in_dtsm = search(path, &dtsm_flags);
     
     if(!found_in_dtsm)
     {
@@ -286,7 +278,7 @@ To search a string we inserted, we simply need to call `__dtsharedmemory_search(
     {
         //Path exists in shared memory
         
-        if(path_permission)
+        if(dtsm_flags & ALLOW_PATH)
         {
             //path access allowed
         }
@@ -298,7 +290,7 @@ To search a string we inserted, we simply need to call `__dtsharedmemory_search(
     
 The procedure in `__dtsharedmemory_search()` goes same way as `__dtsharedmemory_insert()`.
 We go down the tree for every iteration through the input string and if some character is not found in the node's
-bitmap, `false` is retuned indicating non-existence of the string. If the iteration reaches end of string,
+array, `false` is retuned indicating non-existence of the string. If the iteration reaches end of string,
 it checks if that character marks end of the string in the tree and if it does, should it be allowed or denied.
 After this it returns accordingly.
 
@@ -309,14 +301,11 @@ Further we need to discuss about two `expandSharedMemory(size_t offset)`,
 `recycleWastedMemory(size_t *reusableOffset, size_t parentINode)`.
 
 
-`expandSharedMemory()` is always called in an abstract way. We only call this function through `GOTO_OFFSET(offset)`
-or `reserveSpaceInSharedMemory()`.
+`expandSharedMemory()` is always called in an abstract way. We only call this function through `GOTO_OFFSET(offset)`.
 
 Basic job of `GOTO_OFFSET(offset)` is just to give the location, `mmap(2)` base + the offset. It also makes a check if
 offset is greater than size of mapping and if it is, it calls `expandSharedMemory()`.
 
-It may also get called from `reserveSpaceInSharedMemory()`. That happens when `bytesToBeReserverd` would shift 
-`writeFromOffset` in status file to a value greater than current mapping size.
 `expandSharedMemory()` would expand the size of the shared memory file by `truncate(2)` and then call `mmap(2)` again on
 the same file with new size. Then it makes a new `struct SharedMemoryManager` object. It then performs CAS on the global
 manager with new object.
@@ -345,7 +334,7 @@ To make access to this array thread safe, we add 2 new members to the status fil
 	_Atomic(size_t) bitmapForDumping	 [DUMP_YARD_BITMAP_ARRAY_SIZE];
 	_Atomic(size_t) bitmapForRecycling	 [DUMP_YARD_BITMAP_ARRAY_SIZE];
 
-This is a bitmap to keep a record about the entries in the array. This is similar to the bitmap we use in `CNode`.
+This is a bitmap to keep a record about the entries in the array.
 
 When putting an offset in the array, the thread first searches if any bit in `bitmapForDumping` is `0`. If it finds one,
 it makes a copy of the existsing bitmap and updates it to set the index it found as `0` to `1`. Then it performs CAS on
