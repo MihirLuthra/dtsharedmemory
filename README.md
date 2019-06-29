@@ -7,11 +7,11 @@ The main implementation of this code exists in the [dtsm-darwintrace](https://gi
 branch of my forked macports repositoy.
 <p>
 The basic motive of the code is to construct a shared memory cache for the processes into which darwintrace library gets 
-injected. If a process into which darwintrace lib has been injected tries to access a path, it queries registry to check if 
-the path should be allowed or denied for access. It does not do caching of the checked data. That's why it will query same 
-paths again and again if asked. Also, if some other process or thread has checked same path, it shouldn't need to make same 
-check in the registry again. To remove these two shortcomings, a shared memory cache is constructed in between these processes 
-to allow them to store checked path data in a shared space.
+injected. If a process into which darwintrace library has been injected tries to access a path, it asks the server which 
+queries registry to check if the path should be allowed or denied for access. It does not do caching of the checked data. 
+That's why it will ask for same paths again and again if asked. Also, if some other process or thread has checked same path, 
+there shouldn't be a need to make same check in the registry again. To remove these two shortcomings, a shared memory cache is 
+constructed in between these processes to allow them to store checked path data in a shared space.
 
 Adding to that, caching of data would reduce traffic at the server side of trace mode.
 
@@ -42,7 +42,7 @@ needed.
 Going in this sequence, you will eventually land accross every term being explained in detail_**
 
 Note: <br>
-It is a general question that why do function names start with an underscore. 
+It is a general question that why do function names start with an underscore (as they are reserver for special use).
 Functions in the code use `__dtsharedmemory_*()` prefix generally to give it a similar look as is done is 
 `darwintrace.c` by using `__darwintrace_*()`. Also, it actually provides a nice clarity to which module of the code provides 
 the function.
@@ -52,7 +52,7 @@ the function.
 # INITIALISATION
  
  For "every process" that wants to insert or search a path string from shared memory,
- a successful call to `__dtsharedmemory_set_manager()` is required.
+ a successful call to `__dtsharedmemory_set_manager()` is required. 
     
     char *status_file_name = "dtsm-status", *shared_memory_file_name = "dtsm";
     bool did_set_manager = __dtsharedmemory_set_manager(status_file_name, shared_memory_file_name);
@@ -138,7 +138,7 @@ These are:
 
   1)If the prgram using the library is gonna use more than 4 GB memory, `LARGE_MEMORY_NEEDED` should be set to `1` in
   	`dtsharedmemory.h`. This will allow more memory usage but will consume double the amount of memory it did before.
-	Also setting it to one would certainly make insertion and searches take more time. Until not really needed, abvoid 
+	Also setting it to `1` would certainly make insertion and searches take more time. Until not really needed, avoid 
 	setting this.
 	
   2)To print debug or failure messages, set `DEBUG_MESSAGES_ALLOWED` to `1` in `dtsharedmemory.h`.
