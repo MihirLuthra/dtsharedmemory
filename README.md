@@ -5,6 +5,10 @@ macports, [speed up trace mode project](https://trac.macports.org/wiki/SummerOfC
 
 The main implementation of this code exists in the [dtsm-darwintrace](https://github.com/MihirLuthra/macports-base/tree/dtsm-darwintrace) 
 branch of my forked macports repositoy.
+
+Speed comparisons for installation of ports have been recorded in a [spreedsheet](https://docs.google.com/spreadsheets/d/1ksj3Fex-AnTEU4f4IRzwUkTpN4XfUye-HqSdZwXOsKs/edit#gid=0).
+Probably more testing is needed for speed comparisons.
+
 <p>
 The basic motive of the code is to construct a shared memory cache for the processes into which darwintrace library gets 
 injected. If a process into which darwintrace library has been injected tries to access a path, it asks the server which 
