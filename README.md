@@ -1,3 +1,6 @@
+NOTE: This implementation doesn't do hashing. Its more like just a trie which works concurrently between multiple threads and 
+processes and with no node deletion feature.
+
 # dtsharedmemory
 
 This repository contains standalone shared memory cache data sturcture implementation with a test file which are made as per 
