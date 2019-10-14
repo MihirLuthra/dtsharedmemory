@@ -1,5 +1,5 @@
 NOTE: This implementation doesn't do hashing. Its more like just a trie which works concurrently between multiple threads and 
-processes and with no node deletion feature.
+processes and with no node deletion feature and is lock free.
 
 # dtsharedmemory
 
