@@ -41,7 +41,7 @@ The readme is divided into two parts:
 (C)[SHORTCOMINGS](https://github.com/MihirLuthra/dtsharedmemory#cshortcomings)
 
 The code takes help from [this](https://arxiv.org/abs/1709.06056?context=cs) research paper which explains algorithm involved 
-in ctrie. Don't worry if you didn't go through the research paper. Even if you read the complete readme, you will understand
+similar to ctrie. Don't worry if you didn't go through the research paper. Even if you read the complete readme, you will understand
 the working of code easily. Although basic knowledge of how a [trie](https://www.youtube.com/watch?v=-urNrIAQnNo) works is 
 needed.
 
@@ -167,7 +167,7 @@ In macports-base, it is done in `porttrace.tcl` by `mktemp` and in `test_dtshare
 
 When a process or thread has checked a path, it will insert it in this file along with its permission(and other data) in the 
 shared memory. Everytime before a process is going to check registry, it will first check shared memory cache.
-The data structure used to store the paths in dtsm is [ctrie](https://en.wikipedia.org/wiki/Ctrie) with some modifications.
+The data structure used to store the paths in dtsm is [ctrie](https://en.wikipedia.org/wiki/Ctrie) with some modifications without hashing.
 
 In order to make the access to shared memory file fast, they are `mmap(2)`'d in each process that wants to access it.
 But to `mmap(2)` the file, it needs to have a size beforehand, which is defined in `dtsharedmemory.h` as `INITIAL_FILE_SIZE`.
