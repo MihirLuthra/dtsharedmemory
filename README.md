@@ -1,5 +1,8 @@
 NOTE: This implementation doesn't do hashing. Its more like just a trie which works concurrently between multiple threads and 
 processes and with no node deletion feature and is lock free.
+https://github.com/MihirLuthra/dtsm_alloc
+
+A new implementation is being developed noting the shortcomings of this one.
 
 # dtsharedmemory
 
