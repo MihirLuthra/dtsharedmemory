@@ -3,7 +3,7 @@ processes and with no node deletion feature and is lock free.
 
 A new implementation is being developed noting the shortcomings of this one.
 
-https://github.com/MihirLuthra/dtsm_alloc
+https://github.com/MihirLuthra/dtsm_alloc + https://github.com/neverpanic/cctrie
 
 # dtsharedmemory
 
