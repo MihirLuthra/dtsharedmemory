@@ -3,7 +3,11 @@ processes and with no node deletion feature and is lock free.
 
 A new implementation is being developed noting the shortcomings of this one.
 
-https://github.com/MihirLuthra/dtsm_alloc + https://github.com/neverpanic/cctrie
+https://github.com/MihirLuthra/cctrie + https://github.com/MihirLuthra/shm_alloc
+
+First one is a ctrie and the second one is a shared memory allocation library.
+Its almost done, all what remains is to to implement reference counting to free() unneeded memory thus dealing with memory
+leaks and documentation.
 
 # dtsharedmemory
 
