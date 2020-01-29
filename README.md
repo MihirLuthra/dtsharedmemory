@@ -1,7 +1,12 @@
-NOTE: This implementation doesn't do hashing. Its more like just a trie which works concurrently between multiple threads and 
-processes and with no node deletion feature and is lock free.
+NOTE: This implementation doesn't do hashing like ctrie does. A major limitation in a trie is the size of nodes.
+Each node requires memory equal to page size. TLB misses are really alot and this makes it much slower.
+Here we do memory allocation in shared memory which we get by <code>mmap(2)</code> and <code>MAP_SHARED</code>.
+It does NOT have transparent huge page support and TLB misses cause significant time dely.
 
-A new implementation is being developed noting the shortcomings of this one.
+Its just a trie which works concurrently between multiple threads and 
+processes and with no node deletion feature and is lock free. 
+
+Better would be to use the following combination:
 
 https://github.com/MihirLuthra/cctrie + https://github.com/MihirLuthra/shm_alloc
 
